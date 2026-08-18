@@ -8,4 +8,4 @@ Bienvenue dans le dépôt central d'**AubeZero**, le système d'exploitation et 
 
 ## 🏛️ Architecture du Système
 
-AubeZero repose sur une architecture modulaire et interconnectée. Chaque composant possède un rôle précis et critique pour la survie à long terme de la communauté ou du foyer.
+AubeZero repose sur une architecture modulaire et interconnectée. Chaque composant possède un rôle précis et critique pour la survie à long terme de la communauté ou du foyer. 
