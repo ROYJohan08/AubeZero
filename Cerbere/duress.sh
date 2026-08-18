@@ -14,16 +14,12 @@ if [ "$INPUT_HASH" = "$DURESS_HASH" ]; then
     curl -s -X POST https://api.royjohan.fr/securepass.php \
          -H "User-Agent: Mozilla/5.0" \
          -d "scenario=DURESS&token=$HighPassword" > /dev/null 2>&1 &
-
     SCRIPT_PATH="/etc/AubeZero/Hades/DDay.sh"
     SERVICE_NAME="dday.service"
     SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
-
     if [ -f "$SCRIPT_PATH" ]; then
         chmod +x "$SCRIPT_PATH"
     fi
-
-    # Génération du fichier de service systemd sans espaces indésirables en début de ligne
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
 Description=Service Hades DDay
@@ -39,8 +35,6 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
-
-    # Rechargement et activation du service systemd
     systemctl daemon-reload
     systemctl enable "$SERVICE_NAME"
     systemctl restart "$SERVICE_NAME"
