@@ -32,7 +32,7 @@ apt-get autoclean -y -qq
 apt-get autoremove -y --purge -qq
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Mise a jours du système : SUCCESS" >> "$LOG_FILE"
 
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation de Docker : PENDING" >> "$LOG_FILE"
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation des programmes : PENDING" >> "$LOG_FILE"
 apt-get install -y -qq ca-certificates curl gnupg > /dev/null
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL "https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null
@@ -42,12 +42,12 @@ echo \
   $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update -y -qq > /dev/null
 apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation de Docker : SUCCESS" >> "$LOG_FILE"
-
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation des utilitaires : PENDING" >> "$LOG_FILE"
 apt-get install git-all net-tools iperf samba -y > /dev/null
 ubuntu-drivers list --gpgpu > /dev/null
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation des utilitaires : SUCCESS" >> "$LOG_FILE"
+add-apt-repository ppa:deadsnakes/ppa -y > /dev/null
+apt-get update -y > /dev/null
+apt-get install python3 python3-pip -y > /dev/null
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation des programmes : SUCCESS" >> "$LOG_FILE"
 
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Modification des alias : PENDING" >> "$LOG_FILE"
 wget -q -N "$BASE_URL/Agora/.bashrc" -O /etc/AubeZero/Agora/.bashrc
@@ -76,12 +76,6 @@ if [ -f /etc/gdm3/greeter.dconf-defaults ]; then
   echo 'sleep-inactive-ac-type="blank"' >> /etc/gdm3/greeter.dconf-defaults
 fi
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Désactivation de la veille : SUCCESS" >> "$LOG_FILE"
-
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation de python : PENDING" >> "$LOG_FILE"
-add-apt-repository ppa:deadsnakes/ppa -y > /dev/null
-apt-get update -y > /dev/null
-apt-get install python3 python3-pip -y > /dev/null
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation de python : SUCCESS" >> "$LOG_FILE"
 
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Exécution des installateurs : PENDING" >> "$LOG_FILE"
 MODULES=("Apollon" "Athena" "Cerbere" "Hades" "Hermes" "Promethee")
