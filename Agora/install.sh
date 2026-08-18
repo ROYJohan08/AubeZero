@@ -77,6 +77,31 @@ if [ -f /etc/gdm3/greeter.dconf-defaults ]; then
 fi
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Désactivation de la veille : SUCCESS" >> "$LOG_FILE"
 
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Montage des disques : PENDING" >> "$LOG_FILE"
+lsblk -pbno NAME,FSTYPE,LABEL,UUID,MOUNTPOINT | while read -r DEV FSTYPE LABEL UUID MOUNT; do
+    if [ -n "$FSTYPE" ] && [ "$FSTYPE" != "swap" ] && [ -z "$MOUNT" ]; then
+        MOUNT_NAME="${LABEL:-$UUID}"
+        if [ -z "$MOUNT_NAME" ]; then
+            continue
+        fi
+        MOUNT_DIR="/media/$MOUNT_NAME"
+        mkdir -p "$MOUNT_DIR" > /dev/null
+        if [ -n "$UUID" ]; then
+            FSTAB_IDENT="UUID=$UUID"
+        else
+            FSTAB_IDENT="$DEV"
+        fi
+        if ! grep -q "$MOUNT_DIR" /etc/fstab && ! grep -q "$FSTAB_IDENT" /etc/fstab; then
+            # Options adaptées : noatime pour limiter l'usure, nofail pour ne pas bloquer le boot si absent
+            echo "$FSTAB_IDENT  $MOUNT_DIR  $FSTYPE  defaults,nofail,x-systemd.device-timeout=5  0  2" >> /etc/fstab
+        fi
+        mount "$MOUNT_DIR" > /dev/null 2>&1 || mount "$DEV" "$MOUNT_DIR" > /dev/null 2>&1
+    fi
+done
+systemctl daemon-reload > /dev/null 2>&1
+mount -a > /dev/null 2>&1
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Montage des disques : SUCCESS" >> "$LOG_FILE"
+
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Exécution des installateurs : PENDING" >> "$LOG_FILE"
 MODULES=("Apollon" "Athena" "Cerbere" "Hades" "Hermes" "Promethee")
 for module in "${MODULES[@]}"; do
