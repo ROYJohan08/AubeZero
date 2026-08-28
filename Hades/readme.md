@@ -1,27 +1,21 @@
-# Hades — Data Destruction & Purge Framework
+# Module Hadès — Le Destructeur
 
-**Hades** est le sous-système d'effacement et de destruction de données d'urgence du projet **AubeZero**. Conçu pour réagir immédiatement lors du déclenchement d'un code de contrainte (*Duress Code*), il regroupe l'ensemble des scripts et modules responsables de l'effacement irréversible des supports de stockage physiques, des périphériques mobiles synchronisés et des traces d'activité système.
+> *"Maître des ombres et ultime rempart d'AubeZero, je veille dans le silence. S'il faut effacer nos traces pour préserver nos secrets, je suis la fin absolue."*
 
----
+## Fonction
+Je suis le module de sécurité critique, de destruction d'urgence et d'application des protocoles de crise d'AubeZero. Mon rôle est de réagir aux compromissions majeures ou aux contraintes physiques extrêmes en orchestrant l'alerte, la diffusion des consignes d'urgence et, si nécessaire, l'anéantissement irréversible de l'ensemble des données et des infrastructures logiques du système.
 
-## Architecture & Modules
+## Fonctionnalités principales
+* **Protocoles de Duress (Contrainte sous menace) :** Détection et exécution de procédures furtives lorsqu'un utilisateur interagit sous la contrainte (codes d'urgence, fausse réinitialisation, leurres).
+* **Système d'Alerte & Disjonction globale (BRB) :** Déclenchement d'une alerte prioritaire répertoriée et relayée à travers les différents sous-systèmes pour isoler les réseaux et verrouiller les accès.
+* **Documentation & Consignes de Crise (Proto) :** Hébergement d'un serveur d'urgence dédié à la consultation des protocoles opérationnels, consignes de dégradation et procédures de secours en situation dégradée.
+* **Destruction Totale & Irrémédiable (Warranty) :** Procédure d'urgence ultime assurant l'effacement définitif (wipe sécurisé), la destruction des clés de chiffrement (LUKS/Shred) et la neutralisation des supports de stockage du système.
 
-Le framework **Hades** s'articule autour de plusieurs routines spécialisées :
+## Architecture des Services
 
-```text
-                        ┌────────────────────────────────┐
-                        │      Service Hades Engine      │
-                        │    (/etc/AubeZero/Hades/)      │
-                        └───────────────┬────────────────┘
-                                        │
-         ┌──────────────────────────────┼──────────────────────────────┐
-         ▼                              ▼                              ▼
-┌─────────────────┐           ┌──────────────────┐           ┌──────────────────┐
-│  Storage Erase  │           │   Mobile Purge   │           │ System Tracks    │
-│    (DDay.sh)    │           │    (Mobile.sh)   │           │    (Clean.sh)    │
-└────────┬────────┘           └────────┬─────────┘           └────────┬─────────┘
-         │                             │                              │
-         ▼                             ▼                              ▼
- Effacement matériel          Effacement à distance           Nettoyage des
- (NVMe Sanitize /             des historiques, logs           historiques, RAM
- ATA Secure Erase)            et sessions smartphones          et traces système
+| Service | Rôle et Description |
+| :--- | :--- |
+| **Duress** | Moteur de gestion des codes sous contrainte, capable de déclencher des réponses silencieuses, des leurres ou l'isolement du profil. |
+| **BRB** *(Big Red Button)* | Système de diffusion d'alertes critiques trans-modules pour le basculement instantané des équipements en mode défense. |
+| **Proto** | Serveur web d'urgence hautement disponible détaillant l'ensemble des procédures opérationnelles, consignes de sécurité et protocoles de crise. |
+| **Warranty** | Orchestrateur de destruction matérielle et logique exécutant la suppression définitive et irréversible des clés, volumes et données. |
