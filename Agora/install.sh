@@ -1,23 +1,32 @@
 #!/bin/bash
 
+# === Vérification des droits administrateurs === #
 if [ "$EUID" -ne 0 ]; then 
     echo "Droits insuffisants. Veuillez exécuter ce script en tant que root." >&2
     exit 1
 fi
+
+# === Stop en cas d'erreurs === #
 set -e
+
+# === Définition des variables === #
 LOG_DIR="/etc/AubeZero/Mnemosyne"
 LOG_FILE="$LOG_DIR/$(date +%Y-%m).log"
 Programme="Agora-Install"
 BASE_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main"
+MODULES_DOWNLOAD=("Apollon" "Athena" "Cerbere" "Hades" "Hermes" "Promethee")
+DL_FAIL=0
+
+# === Création du dossier de log === #
 mkdir -p "$LOG_DIR" > /dev/null
 
+# === Création des dossiers === #
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Création des dossiers : PENDING" >> "$LOG_FILE"
 mkdir -p /etc/AubeZero/{Agora,Apollon,Athena,Cerbere,Hades,Hermes,Promethee} > /dev/null
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Création des dossiers : SUCCESS" >> "$LOG_FILE"
 
+# === Téléchargement des installateurs des sous-modules === #
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des installateurs : PENDING" >> "$LOG_FILE"
-MODULES_DOWNLOAD=("Apollon" "Athena" "Cerbere" "Hades" "Hermes" "Promethee")
-DL_FAIL=0
 for mod in "${MODULES_DOWNLOAD[@]}"; do
     if ! wget -q -N "$BASE_URL/$mod/install.sh" -O "/etc/AubeZero/$mod/install.sh"; then
         DL_FAIL=1
@@ -30,6 +39,7 @@ if [ "$DL_FAIL" -eq 1 ]; then
 fi
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des installateurs : SUCCESS" >> "$LOG_FILE"
 
+# === Mise a jour du systeme === #
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Mise a jours du système : PENDING" >> "$LOG_FILE"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y -qq > /dev/null
@@ -38,6 +48,7 @@ apt-get full-upgrade -y -qq > /dev/null
 apt-get autoclean -y -qq > /dev/null
 apt-get autoremove -y --purge -qq > /dev/null
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Mise a jours du système : SUCCESS" >> "$LOG_FILE"
+
 
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation des programmes : PENDING" >> "$LOG_FILE"
 apt-get install -y -qq ca-certificates curl gnupg software-properties-common > /dev/null
@@ -49,9 +60,11 @@ add-apt-repository ppa:deadsnakes/ppa -y > /dev/null 2>&1
 apt-get update -y -qq > /dev/null
 apt-get install -y -qq \
     docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
+    webp imagemagick ffmpeg unzip p7zip-full unrar \
     git net-tools iperf samba python3 python3-pip > /dev/null
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation des programmes : SUCCESS" >> "$LOG_FILE"
 
+# === Modification des alias === #
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Modification des alias : PENDING" >> "$LOG_FILE"
 if wget -q -N "$BASE_URL/Agora/.bashrc" -O /etc/AubeZero/Agora/.bashrc; then
     cp -f /etc/AubeZero/Agora/.bashrc /root/.bashrc
@@ -67,6 +80,7 @@ else
 fi
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Modification des alias : SUCCESS" >> "$LOG_FILE"
 
+# === Désactivation de la veille === #
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Désactivation de la veille : PENDING" >> "$LOG_FILE"
 systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target > /dev/null 2>&1
 mkdir -p /etc/systemd/sleep.conf.d > /dev/null
@@ -84,6 +98,7 @@ if [ -f /etc/gdm3/greeter.dconf-defaults ]; then
 fi
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Désactivation de la veille : SUCCESS" >> "$LOG_FILE"
 
+# === Montage des disques === #
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Montage des disques : PENDING" >> "$LOG_FILE"
 lsblk -pbno NAME,FSTYPE,LABEL,UUID,MOUNTPOINT | while read -r DEV FSTYPE LABEL UUID MOUNT; do
     if [ -n "$FSTYPE" ] && [ "$FSTYPE" != "swap" ] && [ -z "$MOUNT" ]; then
@@ -108,6 +123,7 @@ systemctl daemon-reload > /dev/null 2>&1
 mount -a > /dev/null 2>&1
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Montage des disques : SUCCESS" >> "$LOG_FILE"
 
+# === Lancement des sous-modules === #
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Exécution des installateurs : PENDING" >> "$LOG_FILE"
 MODULES=("Apollon" "Athena" "Cerbere" "Hades" "Hermes" "Promethee")
 for module in "${MODULES[@]}"; do
