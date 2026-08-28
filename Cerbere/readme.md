@@ -1,26 +1,23 @@
-# Module Cerbere — Le Coffre-Fort Numérique
+# Module Cerbère — Le Coffre-Fort Numérique
 
-> *"Je suis le gardien des secrets d'AubeZero. Mes chaînes sont impénétrables et mes registres sont incorruptibles."*
+> *"Gardien incorruptible des accès et de la santé du système, je surveille les seuils d'AubeZero. Nul ne franchit mes portes sans autorisation, et toute anomalie déclenche ma vigie ultime."*
 
 ## Fonction
-Je suis le module de stockage sécurisé des accès, des accréditations et de la résilience du système. Je protège les données d'authentification critiques, assure la traçabilité des opérations et garantis la survie ou la destruction ciblée de l'infrastructure en cas d'intrusion.
+Je suis le module de sécurité opérationnelle, de contrôle d'accès et de surveillance continue d'AubeZero. Mon rôle est d'assurer la protection des identifiants secrets, de surveiller la santé matérielle et logicielle des infrastructures, et de déclencher des mécanismes d'isolation et de coupure physique ou logique immédiate en cas d'intrusion ou de dysfonctionnement critique.
 
 ## Fonctionnalités principales
-* **Gestion des accréditations & Mots de passe :** Centralisation, injection sécurisée et recherche distribuée du fichier `credentials.sh` à travers les différents volumes du système.
-* **Procédure de Duresse (Duress Code) :** Détection d'authentification sous contrainte via PAM (`pam_exec.so`), vérification du hash SHA-256 et déclenchement d'alertes réseau d'urgence avec instanciation du protocole *Hades DDay*.
-* **Watchdog & Auto-Guérison Réseau :** Surveillance continue de la charge, de la mémoire et de la connectivité réseau avec relance automatique de `systemd-networkd` et protection contre les blocages noyau (*Kernel Panic / OOM*).
-* **Traçabilité & Journalisation (Mnemosyne) :** Enregistrement horodaté et infalsifiable de toutes les étapes d'installation, des incidents réseau et des événements de duresse.
+* **Gestion Centralisée des Secrets (Creds) :** Stockage coffre-fort sécurisé, chiffré et compartimenté de l'ensemble des clés d'accès, mots de passe et jetons d'authentification du système.
+* **Protocoles de Duress Unifiés (Duress) :** Intégration du système de sous-contrainte partagé avec le module Hadès, permettant de réagir silencieusement à une saisie de code sous menace ou intrusion physique.
+* **Supervision Métrique & Matérielle (Glances) :** Métrologie temps réel surveillant les ressources système (charge CPU, température, mémoire, disques et interfaces réseau).
+* **Orchestration & Surveillance des Conteneurs (Portainer) :** Interface et contrôle continus du parc de conteneurs applicatifs (Docker) assurant la santé des services en exécution.
+* **Watchdog de Secours & Isolation d'Urgence (Watchdog) :** Disjoncteur logique et matériel autonome capable d'interrompre l'alimentation ou de couper les flux réseau instantanément en cas de défaillance critique, d'anomalie système ou de rupture de sécurité.
 
----
+## Architecture des Services
 
-## Architecture des Fichiers
-
-```text
-/etc/AubeZero/
-├── Cerbere/
-│   ├── credentials.sh     # Accréditations et secrets système chiffrés
-│   ├── duress.sh          # Traitement et déclenchement du protocole duresse
-│   ├── duress_pam.sh      # Wrapper d'interception PAM pour le compte 'duress'
-│   └── fix-network.sh     # Script de réparation et de test réseau pour le Watchdog
-└── Mnemosyne/
-    └── YYYY-MM.log        # Registre mensuel des journaux d'événements
+| Service | Rôle et Description |
+| :--- | :--- |
+| **Creds** | Coffre-fort chiffré centralisé (vault) pour la gestion des mots de passe, identifiants et clés de chiffrement d'AubeZero. |
+| **Duress** | Interface partagée avec Hadès déclenchant des protocoles de leurre ou de sécurité avancée lors d'une saisie de mot de passe sous contrainte. |
+| **Glances** | Module de supervision matérielle pour l'analyse en temps réel des métriques du serveur et des composants logiques. |
+| **Portainer** | Gestionnaire et moniteur d'orchestration Docker assurant le contrôle de l'état des conteneurs applicatifs et de leurs réseaux. |
+| **Watchdog** | Système de sécurité matérielle et logicielle (*kill-switch*) exécutant une coupure d'urgence pour préserver le système en cas d'anomalie critique. |
