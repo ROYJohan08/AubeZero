@@ -56,6 +56,7 @@ ZIM_FILES=(
 BASE_DIR="/media/Docs01/Logiciels/StandaloneInstaller"
 WGET_FLAGS="-N -c -q --show-progress"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+CREDENTIALS_FILE="/etc/RJIDomoNas/credentials.sh"
 
 # === Création du dossier === #
 mkdir -p "$LOG_DIR"
@@ -70,15 +71,26 @@ mkdir -p "$BASE_DIR/AnyDesk/"{Windows,Mac,Linux,Android}
 mkdir -p "$BASE_DIR/LibreOffice/"{Windows,Mac,Linux}
 mkdir -p "$BASE_DIR/ISOs/"{Ubuntu,Windows}
 
+# === Intégration des credentials === #
+
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Sourcage des credentials : PENDING" >> "$LOG_FILE"
+if [[ -f "$CREDENTIALS_FILE" ]]; then
+    source "$CREDENTIALS_FILE"
+	echo "$(date +'%Y%m%d%H:%M')-${Programme}-Sourcage des credentials : SUCCESS" >> "$LOG_FILE"
+else
+    echo "$(date +'%Y%m%d%H:%M')-${Programme}-Sourcage des credentials : FAIL" >> "$LOG_FILE"
+fi
 
 # === Téléchargement des ZIM === #
+
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des .zim : PENDING" >> "$LOG_FILE"
 for file in "${ZIM_FILES[@]}"; do
-    rsync -avP "$RSYNC_HOST/$file" "$PathDkKiwix/" || echo "$(date +'%Y%m%d%H:%M')-${Programme}-Echec de téléchargement de : $file" >> "$LOG_FILE"
+    rsync -avP "$RSYNC_HOST/$file" "$PathDkKiwix/"
 done
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des .zim : SUCCESS" >> "$LOG_FILE"
 
 # === Téléchargement des installateurs standalone === #
+
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des standalone installers : PENDING" >> "$LOG_FILE"
 wget $WGET_FLAGS -O "$BASE_DIR/Firefox/Windows/Firefox_Setup_Win64.exe" "https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=fr"
 wget $WGET_FLAGS -O "$BASE_DIR/Firefox/Mac/Firefox.dmg" "https://download.mozilla.org/?product=firefox-latest-ssl&os=osx&lang=fr"
@@ -111,14 +123,61 @@ echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des standalone instal
 
 
 # === Démarage du docker kiwix === #
+
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker kiwix : PENDING" >> "$LOG_FILE"
 sudo docker rm -f kiwix
 sudo docker pull ghcr.io/kiwix/kiwix-serve:latest
 sudo docker run -d \
-  --name kiwix \
+	--name kiwix \
 	--restart=unless-stopped \
 	-p "$PortKiwix:8080" \
 	-v "$PathDkKiwix:/data" \
 	ghcr.io/kiwix/kiwix-serve:latest \
 	/data/*.zim
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker kiwix : SUCCESS" >> "$LOG_FILE"
+
+# === Démarage du docker gitea === #
+
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker gitea : PENDING" >> "$LOG_FILE"
+sudo docker rm -f gitea
+sudo docker pull gitea/gitea:latest
+sudo docker run -d \
+	--name gitea \
+	--restart=unless-stopped \
+	-p "$PortGitea:3000" \
+	-p 2222:22 \
+	-v "$PathDkGitea:/data" \
+	-v /etc/timezone:/etc/timezone:ro \
+	-v /etc/localtime:/etc/localtime:ro \
+	gitea/gitea:latest
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker gitea : SUCCESS" >> "$LOG_FILE"
+
+# === Démarage du docker siyuan === #
+
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker siyuan : PENDING" >> "$LOG_FILE"
+sudo docker rm -f siyuan
+sudo docker pull b3log/siyuan:latest
+sudo docker run -d \
+	--name siyuan \
+	-v "$PathDkSi:/siyuan/workspace" \
+	-p "$PortSiyuan:6806" \
+	-e PUID="$USER_ID" \
+	-e PGID="$GROUP_ID" \
+	b3log/siyuan:latest \
+	serve \
+	--workspace=/siyuan/workspace \
+	--accessAuthCode="$HighPassword"
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker siyuan : SUCCESS" >> "$LOG_FILE"
+
+# === Démarage du docker kolibri === #
+
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker kolibri : PENDING" >> "$LOG_FILE"
+sudo docker rm -f kolibri
+sudo docker pull learningequality/kolibri:latest
+sudo docker run -d \
+	--name kolibri \
+	--restart=unless-stopped \
+	-p "$PortKolibri:8080" \
+	-v "$PathDkKolibri:/kolibri" \
+	learningequality/kolibri:latest
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker kolibri : SUCCESS" >> "$LOG_FILE"
