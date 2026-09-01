@@ -78,6 +78,7 @@ done
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des .zim : SUCCESS" >> "$LOG_FILE"
 
 # === Téléchargement des installateurs standalone === #
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des standalone installers : PENDING" >> "$LOG_FILE"
 wget $WGET_FLAGS -O "$BASE_DIR/Firefox/Windows/Firefox_Setup_Win64.exe" "https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=fr"
 wget $WGET_FLAGS -O "$BASE_DIR/Firefox/Mac/Firefox.dmg" "https://download.mozilla.org/?product=firefox-latest-ssl&os=osx&lang=fr"
 wget $WGET_FLAGS -O "$BASE_DIR/Firefox/Linux/firefox.tar.bz2" "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=fr"
@@ -105,11 +106,12 @@ wget $WGET_FLAGS -O "$BASE_DIR/LibreOffice/Linux/LibreOffice_Linux_x86-64_deb.ta
 wget $WGET_FLAGS -O "$BASE_DIR/WinRAR/winrar-x64-fr.exe" "https://www.win-rar.com/fileadmin/winrar-versions/winrar/winrar-x64-701fr.exe"
 wget $WGET_FLAGS -O "$BASE_DIR/ISOs/Ubuntu/ubuntu-24.04-desktop-amd64.iso" "https://releases.ubuntu.com/24.04/ubuntu-24.04-desktop-amd64.iso"
 find "$BASE_DIR" -type f -size 0 -delete
+echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des standalone installers : SUCCESS" >> "$LOG_FILE"
 
 
 # === Démarage du docker kiwix === #
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker kiwix : PENDING" >> "$LOG_FILE"
-sudo docker rm -rf kiwix
+sudo docker rm -f kiwix
 sudo docker pull ghcr.io/kiwix/kiwix-serve:latest
 sudo docker run -d \
   --name kiwix \
