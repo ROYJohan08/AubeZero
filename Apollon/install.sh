@@ -58,6 +58,7 @@ WGET_FLAGS="-N -c -q --show-progress"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 
 # === Création du dossier === #
+mkdir -p "$LOG_DIR"
 mkdir -p "$PathDkKiwix"
 mkdir -p "$BASE_DIR"/{Firefox,Chrome,VLC,Jellyfin,HomeAssistant,Rufus,ImageGlass,PuTTY,FileZilla,NotepadPlusPlus,AnyDesk,LibreOffice,WinRAR,ISOs}
 mkdir -p "$BASE_DIR/Firefox/"{Windows,Mac,Linux,Android}
