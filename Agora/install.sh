@@ -141,3 +141,17 @@ for module in "${MODULES[@]}"; do
     fi
 done
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Exécution des installateurs : SUCCESS" >> "$LOG_FILE"#!/bin/bash
+
+# === Installation du docker LAMP === #
+sudo docker rm -f lamp
+sudo docker pull php:8.2-apache
+sudo docker run -d \
+    --name lamp \
+    --restart=unless-stopped \
+    -e TZ=CET \
+    -v "$PathLamp:/var/www/html" \
+    -v $PathPmTiles:/var/www/html/europe.pmtiles:ro \
+    -v /media/:/media \
+    -p $PortLamp:80 \
+    -p 3306:3306 \
+    php:8.2-apache
