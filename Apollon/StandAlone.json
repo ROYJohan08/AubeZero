@@ -1,8 +1,18 @@
 [
+  {
+    "Nom": "WinRAR",
+    "Version": "Linux",
+    "Url": "https://github.com/peazip/PeaZip/releases"
+  },
+  {
+    "Nom": "WinRAR",
+    "Version": "Linux-flatpack",
+    "Url": "https://flathub.org/apps/io.github.peazip.PeaZip"
+  },
   { 
     "Nom": "ImageReader",
-    "Version": "Linux",
-    "Url": "https://flathub.org/apps/org.kde.gwenview"
+    "Version": "Linux-flatpack",
+    "Url": "https://dl.flathub.org/repo/appstream/org.kde.gwenview.flatpakref"
   },
   {
     "Nom": "Firefox",
