@@ -91,7 +91,8 @@ apt-get update -qq
 apt-get install -y -qq \
     docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
     webp imagemagick ffmpeg unzip p7zip-full unrar \
-    git net-tools iperf samba python3 python3-pip
+    git net-tools iperf samba \
+    python3 python3-pip python3-dev python3-psutil lm-sensors hddtemp
 
 log "Installation des programmes : SUCCESS"
 
