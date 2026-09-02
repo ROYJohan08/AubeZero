@@ -1,10 +1,18 @@
 #!/bin/bash
 
+# === Vérification des droits === #
+
 if [ "$EUID" -ne 0 ]; then 
     echo "Droits insuffisants. Veuillez exécuter ce script en tant que root." >&2
     exit 1
 fi
+
+# === Stop en cas d'erreurs === #
+
 set -e
+
+# === Définition des variables === #
+
 LOG_DIR="/etc/AubeZero/Mnemosyne"
 LOG_FILE="$LOG_DIR/$(date +%Y-%m).log"
 Programme="Cerbere-Install"
@@ -14,7 +22,12 @@ PING_TARGET="192.168.1.1"
 MAX_LOAD="24"
 MIN_MEM="25000"
 REPAIR_SCRIPT="$CERBERE_DIR/fix-network.sh"
+
+# === Création des dossiers === #
+
 mkdir -p "$LOG_DIR" "$CERBERE_DIR" > /dev/null
+
+# === Installation du Watchdog === #
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration du watchdog : PENDING" >> "$LOG_FILE"
 cat << 'EOF' > /etc/sysctl.d/99-autoreboot.conf
 kernel.panic = 10
@@ -56,6 +69,8 @@ EOF
 systemctl enable watchdog --now > /dev/null 2>&1
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration du watchdog : SUCCESS" >> "$LOG_FILE"
 
+# === Cration du credentials === #
+
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration des credentials : PENDING" >> "$LOG_FILE"
 DEST_FILE="$CERBERE_DIR/credentials.sh"
 RECENT_CREDENTIALS=$(find / -type f -name "credentials.sh" \
@@ -83,6 +98,8 @@ else
     exit 1
 fi
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration des credentials : SUCCESS" >> "$LOG_FILE"
+
+# === Création du duress === #
 
 echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration du duress code : PENDING" >> "$LOG_FILE"
 DURESS_PASSWORD="${DuressCode:-}"
