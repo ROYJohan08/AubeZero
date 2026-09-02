@@ -7,6 +7,9 @@ HighPassword=""
 TmdbApiToken=""
 USER_ID=1000
 GROUP_ID=1000
+PrivateIp=""
+PublicIp=""
+PublicDns=""
 
 PathDocs01=""
 PathDocs02=""
