@@ -1,89 +1,127 @@
 #!/bin/bash
 
+exec 1>/dev/null
+set -euo pipefail
+
 # === Vérification des droits administrateurs === #
-if [ "$EUID" -ne 0 ]; then 
-    echo "Droits insuffisants. Veuillez exécuter ce script en tant que root." >&2
+if [[ $EUID -ne 0 ]]; then
+    echo "Droits insuffisants : exécuter ce script en tant que root." >&2
     exit 1
 fi
 
-# === Stop en cas d'erreurs === #
-set -e
-
 # === Définition des variables === #
-LOG_DIR="/etc/AubeZero/Mnemosyne"
+BASE_DIR="/etc/AubeZero"
+LOG_DIR="$BASE_DIR/Mnemosyne"
 LOG_FILE="$LOG_DIR/$(date +%Y-%m).log"
 Programme="Agora-Install"
 BASE_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main"
-MODULES_DOWNLOAD=("Apollon" "Athena" "Cerbere" "Hades" "Hermes" "Promethee")
+MODULES=(Cerbere Apollon Athena Hades Hermes Promethee)
 DL_FAIL=0
 
 # === Création du dossier de log === #
-mkdir -p "$LOG_DIR" > /dev/null
+mkdir -p "$LOG_DIR"
+
+# === Fonction de log === #
+log() {
+    echo "$(date +'%Y%m%d%H:%M')-${Programme}-$1" >> "$LOG_FILE"
+}
 
 # === Création des dossiers === #
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Création des dossiers : PENDING" >> "$LOG_FILE"
-mkdir -p /etc/AubeZero/{Agora,Apollon,Athena,Cerbere,Hades,Hermes,Promethee} > /dev/null
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Création des dossiers : SUCCESS" >> "$LOG_FILE"
+log "Création des dossiers : PENDING"
 
-# === Téléchargement des installateurs des sous-modules === #
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des installateurs : PENDING" >> "$LOG_FILE"
-for mod in "${MODULES_DOWNLOAD[@]}"; do
-    if ! wget -q -N "$BASE_URL/$mod/install.sh" -O "/etc/AubeZero/$mod/install.sh"; then
+mkdir -p "$BASE_DIR/Agora"
+for mod in "${MODULES[@]}"; do
+    mkdir -p "$BASE_DIR/$mod"
+done
+
+log "Création des dossiers : SUCCESS"
+
+# === Téléchargement des installateurs === #
+log "Téléchargement des installateurs : PENDING"
+
+for mod in "${MODULES[@]}"; do
+    TARGET="$BASE_DIR/$mod/install.sh"
+    URL="$BASE_URL/$mod/install.sh"
+
+    if ! curl --fail --silent --show-error -o "$TARGET" "$URL"; then
         DL_FAIL=1
+    else
+        chmod 700 "$TARGET"
     fi
 done
-if [ "$DL_FAIL" -eq 1 ]; then
-    echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des installateurs : FAILED" >> "$LOG_FILE"
-    echo "Erreur : Échec lors du téléchargement d'un ou plusieurs installateurs." >&2
+
+if [[ $DL_FAIL -eq 1 ]]; then
+    log "Téléchargement des installateurs : FAILED"
     exit 1
 fi
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des installateurs : SUCCESS" >> "$LOG_FILE"
 
-# === Mise a jour du systeme === #
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Mise a jours du système : PENDING" >> "$LOG_FILE"
+log "Téléchargement des installateurs : SUCCESS"
+
+# === Mise à jour du système === #
+log "Mise à jour du système : PENDING"
+
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -y -qq > /dev/null
-apt-get upgrade -y -qq > /dev/null
-apt-get full-upgrade -y -qq > /dev/null
-apt-get autoclean -y -qq > /dev/null
-apt-get autoremove -y --purge -qq > /dev/null
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Mise a jours du système : SUCCESS" >> "$LOG_FILE"
+apt-get update -qq
+apt-get upgrade -y -qq
+apt-get full-upgrade -y -qq
+apt-get autoremove -y --purge -qq
+apt-get autoclean -y -qq
 
+log "Mise à jour du système : SUCCESS"
 
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation des programmes : PENDING" >> "$LOG_FILE"
-apt-get install -y -qq ca-certificates curl gnupg software-properties-common > /dev/null
+# === Installation des programmes === #
+log "Installation des programmes : PENDING"
+
+apt-get install -y -qq ca-certificates curl gnupg software-properties-common
+
 install -m 0755 -d /etc/apt/keyrings
-curl -fsSL "https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null
+curl -fsSL "https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg" \
+    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
 chmod a+r /etc/apt/keyrings/docker.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
-add-apt-repository ppa:deadsnakes/ppa -y > /dev/null 2>&1
-apt-get update -y -qq > /dev/null
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") \
+$(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+> /etc/apt/sources.list.d/docker.list
+
+add-apt-repository ppa:deadsnakes/ppa -y >/dev/null 2>&1
+
+apt-get update -qq
 apt-get install -y -qq \
     docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
     webp imagemagick ffmpeg unzip p7zip-full unrar \
-    git net-tools iperf samba python3 python3-pip > /dev/null
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation des programmes : SUCCESS" >> "$LOG_FILE"
+    git net-tools iperf samba python3 python3-pip
+
+log "Installation des programmes : SUCCESS"
 
 # === Modification des alias === #
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Modification des alias : PENDING" >> "$LOG_FILE"
-if wget -q -N "$BASE_URL/Agora/.bashrc" -O /etc/AubeZero/Agora/.bashrc; then
-    cp -f /etc/AubeZero/Agora/.bashrc /root/.bashrc
+log "Modification des alias : PENDING"
+
+BASHRC_URL="$BASE_URL/Agora/.bashrc"
+BASHRC_LOCAL="$BASE_DIR/Agora/.bashrc"
+
+if curl --fail --silent --show-error -o "$BASHRC_LOCAL" "$BASHRC_URL"; then
+    cp -f "$BASHRC_LOCAL" /root/.bashrc
+
     for user_dir in /home/*; do
-        if [ -d "$user_dir" ]; then
-            username=$(basename "$user_dir")
-            cp -f /etc/AubeZero/Agora/.bashrc "$user_dir/.bashrc"
-            chown "$username:$username" "$user_dir/.bashrc"
-        fi
+        [[ -d "$user_dir" ]] || continue
+        user=$(basename "$user_dir")
+        cp -f "$BASHRC_LOCAL" "$user_dir/.bashrc"
+        chown "$user:$user" "$user_dir/.bashrc"
     done
+
+    log "Modification des alias : SUCCESS"
 else
-    echo "$(date +'%Y%m%d%H:%M')-${Programme}-Modification des alias : FAILED (wget error)" >> "$LOG_FILE"
+    log "Modification des alias : FAILED (download)"
 fi
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Modification des alias : SUCCESS" >> "$LOG_FILE"
 
 # === Désactivation de la veille === #
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Désactivation de la veille : PENDING" >> "$LOG_FILE"
-systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target > /dev/null 2>&1
-mkdir -p /etc/systemd/sleep.conf.d > /dev/null
+log "Désactivation de la veille : PENDING"
+
+systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target >/dev/null 2>&1
+
+mkdir -p /etc/systemd/sleep.conf.d
 cat <<EOF > /etc/systemd/sleep.conf.d/nosuspend.conf
 [Sleep]
 AllowSuspend=no
@@ -91,67 +129,76 @@ AllowHibernation=no
 AllowSuspendThenHibernate=no
 AllowHybridSleep=no
 EOF
-if [ -f /etc/gdm3/greeter.dconf-defaults ]; then
-    if ! grep -q 'sleep-inactive-ac-type="blank"' /etc/gdm3/greeter.dconf-defaults; then
-        echo 'sleep-inactive-ac-type="blank"' >> /etc/gdm3/greeter.dconf-defaults
-    fi
+
+if [[ -f /etc/gdm3/greeter.dconf-defaults ]] && \
+   ! grep -q 'sleep-inactive-ac-type="blank"' /etc/gdm3/greeter.dconf-defaults; then
+    echo 'sleep-inactive-ac-type="blank"' >> /etc/gdm3/greeter.dconf-defaults
 fi
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Désactivation de la veille : SUCCESS" >> "$LOG_FILE"
+
+log "Désactivation de la veille : SUCCESS"
 
 # === Montage des disques === #
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Montage des disques : PENDING" >> "$LOG_FILE"
+log "Montage des disques : PENDING"
+
 lsblk -pbno NAME,FSTYPE,LABEL,UUID,MOUNTPOINT | while read -r DEV FSTYPE LABEL UUID MOUNT; do
-    if [ -n "$FSTYPE" ] && [ "$FSTYPE" != "swap" ] && [ -z "$MOUNT" ]; then
-        MOUNT_NAME="${LABEL:-$UUID}"
-        if [ -z "$MOUNT_NAME" ]; then
-            continue
-        fi
-        MOUNT_DIR="/media/$MOUNT_NAME"
-        mkdir -p "$MOUNT_DIR" > /dev/null
-        if [ -n "$UUID" ]; then
-            FSTAB_IDENT="UUID=$UUID"
-        else
-            FSTAB_IDENT="$DEV"
-        fi
-        if ! grep -q "$MOUNT_DIR" /etc/fstab && ! grep -q "$FSTAB_IDENT" /etc/fstab; then
-            echo "$FSTAB_IDENT  $MOUNT_DIR  $FSTYPE  defaults,nofail,x-systemd.device-timeout=5  0  2" >> /etc/fstab
-        fi
-        mount "$MOUNT_DIR" > /dev/null 2>&1 || mount "$DEV" "$MOUNT_DIR" > /dev/null 2>&1
+    [[ -n "$FSTYPE" && "$FSTYPE" != "swap" && -z "$MOUNT" ]] || continue
+
+    MOUNT_NAME="${LABEL:-$UUID}"
+    [[ -n "$MOUNT_NAME" ]] || continue
+
+    MOUNT_DIR="/media/$MOUNT_NAME"
+    mkdir -p "$MOUNT_DIR"
+
+    IDENTIFIER="${UUID:+UUID=$UUID}"
+    IDENTIFIER="${IDENTIFIER:-$DEV}"
+
+    if ! grep -q "$MOUNT_DIR" /etc/fstab && ! grep -q "$IDENTIFIER" /etc/fstab; then
+        echo "$IDENTIFIER  $MOUNT_DIR  $FSTYPE  defaults,nofail,x-systemd.device-timeout=5  0  2" >> /etc/fstab
     fi
+
+    mount "$MOUNT_DIR" >/dev/null 2>&1 || mount "$DEV" "$MOUNT_DIR" >/dev/null 2>&1
 done
-systemctl daemon-reload > /dev/null 2>&1
-mount -a > /dev/null 2>&1
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Montage des disques : SUCCESS" >> "$LOG_FILE"
+
+systemctl daemon-reload >/dev/null 2>&1
+mount -a >/dev/null 2>&1
+
+log "Montage des disques : SUCCESS"
 
 # === Lancement des sous-modules === #
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Exécution des installateurs : PENDING" >> "$LOG_FILE"
-MODULES=("Apollon" "Athena" "Cerbere" "Hades" "Hermes" "Promethee")
-for module in "${MODULES[@]}"; do
-    SCRIPT_PATH="/etc/AubeZero/${module}/install.sh"
-    if [ -f "$SCRIPT_PATH" ]; then
-        echo "$(date +'%Y%m%d%H:%M')-${Programme}-Lancement de ${module} : PENDING" >> "$LOG_FILE"
-        chmod +x "$SCRIPT_PATH"
-        if bash "$SCRIPT_PATH" > /dev/null 2>&1; then
-            echo "$(date +'%Y%m%d%H:%M')-${Programme}-Lancement de ${module} : SUCCESS" >> "$LOG_FILE"
+log "Exécution des installateurs : PENDING"
+
+for mod in "${MODULES[@]}"; do
+    SCRIPT="$BASE_DIR/$mod/install.sh"
+
+    if [[ -f "$SCRIPT" ]]; then
+        log "Lancement de $mod : PENDING"
+        if bash "$SCRIPT" >/dev/null 2>&1; then
+            log "Lancement de $mod : SUCCESS"
         else
-            echo "$(date +'%Y%m%d%H:%M')-${Programme}-Lancement de ${module} : FAILED" >> "$LOG_FILE"
+            log "Lancement de $mod : FAILED"
         fi
     else
-        echo "$(date +'%Y%m%d%H:%M')-${Programme}-Script ${module} introuvable : SKIPPED" >> "$LOG_FILE"
+        log "Script $mod introuvable : SKIPPED"
     fi
 done
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Exécution des installateurs : SUCCESS" >> "$LOG_FILE"#!/bin/bash
+
+log "Exécution des installateurs : SUCCESS"
 
 # === Installation du docker LAMP === #
-sudo docker rm -f lamp
-sudo docker pull php:8.2-apache
-sudo docker run -d \
+log "Installation du Docker LAMP : PENDING"
+
+docker rm -f lamp >/dev/null 2>&1 || true
+docker pull php:8.2-apache
+
+docker run -d \
     --name lamp \
     --restart=unless-stopped \
     -e TZ=CET \
     -v "$PathLamp:/var/www/html" \
-    -v $PathPmTiles:/var/www/html/europe.pmtiles:ro \
+    -v "$PathPmTiles:/var/www/html/europe.pmtiles:ro" \
     -v /media/:/media \
-    -p $PortLamp:80 \
+    -p "$PortLamp:80" \
     -p 3306:3306 \
     php:8.2-apache
+
+log "Installation du Docker LAMP : SUCCESS"
