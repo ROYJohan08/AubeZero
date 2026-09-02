@@ -22,15 +22,62 @@ PING_TARGET="192.168.1.1"
 MAX_LOAD="24"
 MIN_MEM="25000"
 REPAIR_SCRIPT="$CERBERE_DIR/fix-network.sh"
+CONFIG_FILE="/etc/glances/glances.conf"
 
 # === Création des dossiers === #
 
-mkdir -p "$LOG_DIR" "$CERBERE_DIR" > /dev/null
+mkdir -p "$LOG_DIR" "$CERBERE_DIR" "$GLANCES_DIR" > /dev/null
 
 # === Fonction de log === #
 log() {
     echo "$(date +'%Y%m%d%H:%M')-${Programme}-$1" >> "$LOG_FILE"
 }
+
+# === Installation de Glances via pip === #
+log "Installation de Glances : PENDING"
+pip3 install glances[all] > /dev/null
+mkdir -p /etc/glances
+
+cat << EOF > "$CONFIG_FILE"
+[global]
+bind_address = 0.0.0.0
+refresh = 2
+theme = black
+
+[network]
+show_ipv6 = False
+
+[process]
+show_thread = False
+show_children = False
+
+[ports]
+# Exemple : surveiller un port
+# port_80 = True
+
+[sensors]
+# Active les sondes matérielles
+enable = True
+EOF
+
+# === Création du service systemd === #
+cat << EOF > /etc/systemd/system/glances.service
+[Unit]
+Description=Glances Monitoring Tool
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/glances -C /etc/glances/glances.conf -w
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable glances --now
+
+log "Installation de Glances : SUCCESS"
 
 # === Installation du Watchdog === #
 log "Installation et configuration du watchdog : PENDING"
