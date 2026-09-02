@@ -1,6 +1,5 @@
 #!/bin/bash
 Programme="Apollon-standalone"
-
 # === Vérification des droits administrateurs === #
 if [[ $EUID -ne 0 ]]; then
     echo "Droits insuffisants. Veuillez exécuter ce script en tant que root." >&2
@@ -24,6 +23,7 @@ TARGET_DIR="/media/Docs01/Logiciels/StandaloneInstaller"
 TMP_JSON="/tmp/StandAlone.json"
 
 mkdir -p "$TARGET_DIR"
+sudo apt update && sudo apt install -y jq curl
 
 # === Téléchargement JSON === #
 log "Téléchargement de la lite : PENDING"
