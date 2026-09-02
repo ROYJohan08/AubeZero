@@ -1,5 +1,8 @@
 #!/bin/bash
 
+exec 1>/dev/null
+set -euo pipefail
+
 # === Vérification des droits === #
 
 if [ "$EUID" -ne 0 ]; then 
@@ -7,13 +10,10 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# === Stop en cas d'erreurs === #
-
-set -e
-
 # === Définition des variables === #
 
-LOG_DIR="/etc/AubeZero/Mnemosyne"
+BASE_DIR="/etc/AubeZero"
+LOG_DIR="$BASE_DIR/Mnemosyne"
 LOG_FILE="$LOG_DIR/$(date +%Y-%m).log"
 Programme="Cerbere-Install"
 CERBERE_DIR="/etc/AubeZero/Cerbere"
@@ -27,8 +27,13 @@ REPAIR_SCRIPT="$CERBERE_DIR/fix-network.sh"
 
 mkdir -p "$LOG_DIR" "$CERBERE_DIR" > /dev/null
 
+# === Fonction de log === #
+log() {
+    echo "$(date +'%Y%m%d%H:%M')-${Programme}-$1" >> "$LOG_FILE"
+}
+
 # === Installation du Watchdog === #
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration du watchdog : PENDING" >> "$LOG_FILE"
+log "Installation et configuration du watchdog : PENDING"
 cat << 'EOF' > /etc/sysctl.d/99-autoreboot.conf
 kernel.panic = 10
 kernel.hung_task_timeout_secs = 120
@@ -39,17 +44,22 @@ apt-get update -qq > /dev/null
 apt-get install -y watchdog -qq > /dev/null
 cat << EOF > "$REPAIR_SCRIPT"
 #!/bin/bash
+exec 1>/dev/null
+exec 2>&1
 LOG_DIR="/etc/AubeZero/Mnemosyne"
 LOG_FILE="\$LOG_DIR/\$(date +%Y-%m).log"
 Programme="Cerbere-NetworkRepair"
-echo "\$(date +'%Y%m%d%H:%M')-\${Programme}-[WATCHDOG] Perte de connexion détectée. Redémarrage de systemd-networkd" >> "\$LOG_FILE"
+log() {
+    echo "\$(date +'%Y%m%d%H:%M')-\${Programme}-\$1" >> "\$LOG_FILE"
+}
+log "[WATCHDOG] Perte de connexion détectée. Redémarrage de systemd-networkd"
 systemctl restart systemd-networkd
 sleep 5
 if ping -c 1 -W 2 $PING_TARGET > /dev/null 2>&1; then
-    echo "\$(date +'%Y%m%d%H:%M')-\${Programme}-[WATCHDOG] Connexion réseau rétablie avec succès." >> "\$LOG_FILE"
+    log "[WATCHDOG] Connexion réseau rétablie avec succès."
     exit 0
 else
-    echo "\$(date +'%Y%m%d%H:%M')-\${Programme}-[WATCHDOG] Échec du rétablissement. Le serveur va rebooter." >> "\$LOG_FILE"
+    log "Échec du rétablissement. Le serveur va rebooter." 
     exit 1
 fi
 EOF
@@ -67,11 +77,11 @@ repair-binary = $REPAIR_SCRIPT
 repair-timeout = 30
 EOF
 systemctl enable watchdog --now > /dev/null 2>&1
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration du watchdog : SUCCESS" >> "$LOG_FILE"
+log "Installation et configuration du watchdog : SUCCESS"
 
 # === Cration du credentials === #
 
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration des credentials : PENDING" >> "$LOG_FILE"
+log "Installation et configuration des credentials : PENDING"
 DEST_FILE="$CERBERE_DIR/credentials.sh"
 RECENT_CREDENTIALS=$(find / -type f -name "credentials.sh" \
     -not -path "/proc/*" \
@@ -82,9 +92,8 @@ RECENT_CREDENTIALS=$(find / -type f -name "credentials.sh" \
 if [ -n "$RECENT_CREDENTIALS" ] && [ -f "$RECENT_CREDENTIALS" ]; then
     cp "$RECENT_CREDENTIALS" "$DEST_FILE" > /dev/null
 else
-    if ! wget -q -N "$BASE_URL/Cerbere/credentials.sh" -O "$DEST_FILE"; then
-        echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration des credentials : FAILED (wget error)" >> "$LOG_FILE"
-        echo "Erreur : Impossible de télécharger credentials.sh" >&2
+    if ! curl --fail --silent --show-error -o "$DEST_FILE" "$BASE_URL/Cerbere/credentials.sh"; then
+        log "Installation et configuration des credentials : FAILED (wget error)"
         exit 1
     fi
 fi
@@ -94,18 +103,17 @@ if [[ -f "$DEST_FILE" ]]; then
     # shellcheck source=/dev/null
     source "$DEST_FILE"
 else
-    echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration des credentials : FAILED (File missing)" >> "$LOG_FILE"
+    log "Installation et configuration des credentials : FAILED (File missing)"
     exit 1
 fi
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration des credentials : SUCCESS" >> "$LOG_FILE"
+log "Installation et configuration des credentials : SUCCESS"
 
 # === Création du duress === #
 
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration du duress code : PENDING" >> "$LOG_FILE"
+log "Installation et configuration du duress code : PENDING"
 DURESS_PASSWORD="${DuressCode:-}"
 if [ -z "$DURESS_PASSWORD" ]; then
-    echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration du duress code : FAILED (DuressCode unset)" >> "$LOG_FILE"
-    echo "Erreur : La variable DuressCode est vide dans $DEST_FILE" >&2
+    log "Installation et configuration du duress code : FAILED (DuressCode unset)"
     exit 1
 fi
 DURESS_SCRIPT="$CERBERE_DIR/duress.sh"
@@ -115,12 +123,11 @@ if ! id "$DURESS_USER" &>/dev/null; then
     useradd -r -s /bin/false "$DURESS_USER" > /dev/null
 fi
 echo "$DURESS_USER:$DURESS_PASSWORD" | chpasswd > /dev/null
-if wget -q -N "$BASE_URL/Cerbere/duress.sh" -O "$DURESS_SCRIPT"; then
+if curl --fail --silent --show-error -o "$DURESS_SCRIPT" "$BASE_URL/Cerbere/duress.sh"; then
     chown root:root "$DURESS_SCRIPT" > /dev/null
     chmod 700 "$DURESS_SCRIPT" > /dev/null
 else
-    echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration du duress code : FAILED (wget error)" >> "$LOG_FILE"
-    echo "Erreur : Impossible de télécharger $BASE_URL/Cerbere/duress.sh" >&2
+    log "Installation et configuration du duress code : FAILED (wget error)"
     exit 1
 fi
 cat << EOF > "$PAM_WRAPPER"
@@ -139,4 +146,23 @@ if ! grep -q "$PAM_WRAPPER" "$PAM_FILE"; then
     cp "$PAM_FILE" "${PAM_FILE}.bak_cerbere" > /dev/null
     sed -i "1i $PAM_RULE" "$PAM_FILE" > /dev/null
 fi
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Installation et configuration du duress code : SUCCESS" >> "$LOG_FILE"
+log "Installation et configuration du duress code : SUCCESS"
+
+log "Installation et configuration de vaultWarden : PENDING"
+sudo mkdir -p /media/Runable/Docker/VA-Data/ssl
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout $PathVault/filename.key \
+    -out $PathVault/filename.crt \
+    -subj "/CN=$PublicDns"
+sudo docker rm -f vaultwarden
+sudo docker pull vaultwarden/server:latest
+sudo docker run -d \
+    --name vaultwarden \
+    -e ROCKET_TLS='{certs="/data/ssl/filename.crt",key="/data/ssl/filename.key"}' \
+    -e WEBSOCKET_ENABLED=true \
+    -v $PathVault:/data \
+    -p $PortVault:80 \
+    -p 3012:3012 \
+    --restart unless-stopped \
+    vaultwarden/server:latest
+log "Installation et configuration de vaultWarden : SUCCESS"
