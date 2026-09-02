@@ -1,4 +1,9 @@
 [
+  { 
+    "Nom": "ImageReader",
+    "Version": "Linux",
+    "Url": "https://flathub.org/apps/org.kde.gwenview"
+  },
   {
     "Nom": "Firefox",
     "Version": "Windows",
@@ -65,7 +70,7 @@
     "Url": "https://github.com/pbatard/rufus/releases/download/v4.6/rufus-4.6.exe"
   },
   {
-    "Nom": "ImageGlass",
+    "Nom": "ImageReader",
     "Version": "Windows",
     "Url": "https://github.com/d2phap/ImageGlass/releases/download/v9.3.0.1019/ImageGlass_9.3.0.1019_x64.exe"
   },
