@@ -152,3 +152,33 @@ done
 
 rm -f "$TMP_JSON"
 log "Traitement de la liste : SUCCESS"
+# === Ajout automatique de la tâche cron === #
+CRON_CMD="bash /etc/AubeZero/Apollon/standalone.sh"
+CRON_SCHEDULE="0 3 1-7 * 3"
+CRON_LINE="$CRON_SCHEDULE $CRON_CMD"
+
+log "Vérification de la tâche cron : START"
+
+# Vérifie si la tâche existe déjà
+if crontab -l 2>/dev/null | grep -F "$CRON_CMD" >/dev/null 2>&1; then
+    log "Tâche cron déjà présente : OK | Commande=$CRON_CMD"
+else
+    log "Tâche cron absente : AJOUT | Commande=$CRON_CMD"
+
+    # Ajout de la tâche cron
+    (
+        crontab -l 2>/dev/null
+        echo "$CRON_LINE"
+    ) | crontab -
+
+    # Vérification post-ajout
+    if crontab -l 2>/dev/null | grep -F "$CRON_CMD" >/dev/null 2>&1; then
+        log "Tâche cron ajoutée : SUCCESS | Ligne=$CRON_LINE"
+    else
+        log "Tâche cron ajoutée : FAIL | Ligne=$CRON_LINE"
+        echo "Échec de l’ajout de la tâche cron." >&2
+        exit 1
+    fi
+fi
+
+log 
