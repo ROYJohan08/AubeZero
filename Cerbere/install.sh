@@ -26,7 +26,7 @@ CONFIG_FILE="/etc/glances/glances.conf"
 
 # === Création des dossiers === #
 
-mkdir -p "$LOG_DIR" "$CERBERE_DIR" "$GLANCES_DIR" > /dev/null
+mkdir -p "$LOG_DIR" "$CERBERE_DIR" > /dev/null
 
 # === Fonction de log === #
 log() {
@@ -213,3 +213,19 @@ sudo docker run -d \
     --restart unless-stopped \
     vaultwarden/server:latest
 log "Installation et configuration de vaultWarden : SUCCESS"
+
+log "Installation et configuration de portainer : PENDING"
+sudo docker rm -f portainer
+sudo docker pull portainer/portainer-ce:latest
+sudo docker run -d \
+    --name portainer \
+    --privileged \
+    --restart=unless-stopped \
+    -e TZ=CET \
+    -p 8000:8000 \
+    -p 9443:9443 \
+    -p "$PortPortainer:9000" \
+    -v $PathPortainerData:/var/run/docker.sock \
+    -v "$PathPortainerConfig:/data" \
+    portainer/portainer-ce:latest
+log "Installation et configuration de portainer : SUCCESS"
