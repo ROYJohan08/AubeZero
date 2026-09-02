@@ -1,0 +1,132 @@
+[
+  {
+    "Nom": "Firefox",
+    "Version": "Windows",
+    "Url": "https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=fr"
+  },
+  {
+    "Nom": "Firefox",
+    "Version": "Mac",
+    "Url": "https://download.mozilla.org/?product=firefox-latest-ssl&os=osx&lang=fr"
+  },
+  {
+    "Nom": "Firefox",
+    "Version": "Linux",
+    "Url": "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=fr"
+  },
+  {
+    "Nom": "Firefox",
+    "Version": "Android",
+    "Url": "https://download.mozilla.org/?product=fennec-latest&os=android&lang=multi"
+  },
+  {
+    "Nom": "Chrome",
+    "Version": "Windows",
+    "Url": "https://dl.google.com/chrome/install/standalone/current/chrome_installer.exe"
+  },
+  {
+    "Nom": "Chrome",
+    "Version": "Mac",
+    "Url": "https://dl.google.com/chrome/mac/stable/GGRO/googlechrome.dmg"
+  },
+  {
+    "Nom": "Chrome",
+    "Version": "Linux",
+    "Url": "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
+  },
+  {
+    "Nom": "VLC",
+    "Version": "Windows",
+    "Url": "https://get.videolan.org/vlc/last/win64/vlc-3.0.21-win64.exe"
+  },
+  {
+    "Nom": "VLC",
+    "Version": "Mac",
+    "Url": "https://get.videolan.org/vlc/last/macosx/vlc-3.0.21-intel64.dmg"
+  },
+  {
+    "Nom": "VLC",
+    "Version": "Android",
+    "Url": "https://get.videolan.org/vlc-android/3.5.4/VLC-Android-3.5.4-arm64-v8a.apk"
+  },
+  {
+    "Nom": "Jellyfin",
+    "Version": "Android",
+    "Url": "https://github.com/jellyfin/jellyfin-android/releases/latest/download/jellyfin-android-v0.17.8-release.apk"
+  },
+  {
+    "Nom": "HomeAssistant",
+    "Version": "Android",
+    "Url": "https://github.com/home-assistant/android/releases/latest/download/app-minimal-release.apk"
+  },
+  {
+    "Nom": "Rufus",
+    "Version": "Windows",
+    "Url": "https://github.com/pbatard/rufus/releases/download/v4.6/rufus-4.6.exe"
+  },
+  {
+    "Nom": "ImageGlass",
+    "Version": "Windows",
+    "Url": "https://github.com/d2phap/ImageGlass/releases/download/v9.3.0.1019/ImageGlass_9.3.0.1019_x64.exe"
+  },
+  {
+    "Nom": "PuTTY",
+    "Version": "Windows",
+    "Url": "https://the.earth.li/~sgtatham/putty/latest/w64/putty-64bit-installer.msi"
+  },
+  {
+    "Nom": "FileZilla",
+    "Version": "Windows",
+    "Url": "https://download.filezilla-project.org/client/FileZilla_3.68.1_win64-setup.exe"
+  },
+  {
+    "Nom": "NotepadPlusPlus",
+    "Version": "Windows",
+    "Url": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.7.7/npp.8.7.7.Installer.x64.exe"
+  },
+  {
+    "Nom": "AnyDesk",
+    "Version": "Windows",
+    "Url": "https://download.anydesk.com/AnyDesk.exe"
+  },
+  {
+    "Nom": "AnyDesk",
+    "Version": "Mac",
+    "Url": "https://download.anydesk.com/anydesk_mac.dmg"
+  },
+  {
+    "Nom": "AnyDesk",
+    "Version": "Linux",
+    "Url": "https://download.anydesk.com/linux/anydesk_6.3.0-1_amd64.deb"
+  },
+  {
+    "Nom": "AnyDesk",
+    "Version": "Android",
+    "Url": "https://download.anydesk.com/android/anydesk-release.apk"
+  },
+  {
+    "Nom": "LibreOffice",
+    "Version": "Windows",
+    "Url": "https://download.documentfoundation.org/libreoffice/stable/24.8.0/win/x86_64/LibreOffice_24.8.0_Win_x86-64.msi"
+  },
+  {
+    "Nom": "LibreOffice",
+    "Version": "Mac",
+    "Url": "https://download.documentfoundation.org/libreoffice/stable/24.8.0/mac/x86_64/LibreOffice_24.8.0_MacOS_x86-64.dmg"
+  },
+  {
+    "Nom": "LibreOffice",
+    "Version": "Linux",
+    "Url": "https://download.documentfoundation.org/libreoffice/stable/24.8.0/deb/x86_64/LibreOffice_24.8.0_Linux_x86-64_deb.tar.gz"
+  },
+  {
+    "Nom": "WinRAR",
+    "Version": "Windows",
+    "Url": "https://www.win-rar.com/fileadmin/winrar-versions/winrar/winrar-x64-701fr.exe"
+  },
+  {
+    "Nom": "ISOs",
+    "Version": "Ubuntu",
+    "Url": "https://releases.ubuntu.com/24.04/ubuntu-24.04-desktop-amd64.iso"
+  }
+]
