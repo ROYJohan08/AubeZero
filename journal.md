@@ -1,11 +1,23 @@
-sudo nano /etc/sysctl.d/99-watchdog.conf
-```# Redémarrer automatiquement 10 secondes après un panic du noyau
-kernel.panic = 10
+# SUIVI
 
-# Déclencher un panic si un processus reste bloqué trop longtemps (lockup)
-kernel.hung_task_timeout_secs = 120```
-sudo nano /etc/sysctl.d/99-oom-panic.conf
-```# Déclencher un panic noyau lorsque la mémoire est totalement saturée
-vm.panic_on_oom = 1```
-sudo apt update && sudo apt install watchdog -y
-sudo sysctl --system
+- Agora
+ - [ ] Préparation des dossiers.
+ - [ ] Téléchargement des installateurs des sous-modules.
+ - [ ] Installations des requierements.
+ - [ ] Lancement des sous-modules.
+- Cerbère
+ - [ ] Préparation des dossiers.
+ - [ ] Importation de credentials.
+ - [ ] Installation des requirements.
+ - [ ] Installation de vaultWarden.
+ - [ ] Installation de Duress.
+ - [ ] Installation de watchdog.
+- Apollon
+ - [ ] Préparation des dossiers.
+ - [ ] Installation des requirements.
+ - [ ] Installation de kiwix.
+  - [ ] Importation des ZIM.
+- [ ] Installation de kolibri.
+  - [ ] Importation des cours.
+- [ ] Installation de Pmtiles.
+ - [ ] Importation de la carte.
