@@ -4,12 +4,12 @@ exec 1>/dev/null
 set -euo pipefail
 
 # === Vérification des droits === #
-
 if [ "$EUID" -ne 0 ]; then 
     echo "Droits insuffisants. Veuillez exécuter ce script en tant que root." >&2
     exit 1
 fi
 
+# === Function de log === #
 log() {
     Programme="Cerbere-Install"
     mkdir -p "/etc/AubeZero/Mnemosyne/" > /dev/null
@@ -17,7 +17,6 @@ log() {
 }
 
 # === Définition des variables === #
-
 BASE_DIR="/etc/AubeZero"
 CERBERE_DIR="/etc/AubeZero/Cerbere"
 BASE_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main"
@@ -88,7 +87,6 @@ show_children = False
 enable = True
 EOF
 fi
-
 if [ -f "$CONFIG_FILE" ] && command -v glances &> /dev/null; then
     log "[+] Glances est opérationnel avec son fichier de configuration."
 else
@@ -97,25 +95,47 @@ fi
 log "[STOP] Installation de Glances."
 
 # === Installation du Watchdog === #
-log "Installation et configuration du watchdog : PENDING"
-cat << 'EOF' > /etc/sysctl.d/99-autoreboot.conf
+REPAIR_SCRIPT="/etc/AubeZero/Cerbere/network-repair.sh"
+MAX_LOAD=${MAX_LOAD:-24}
+MIN_MEM=${MIN_MEM:-1}
+PING_TARGET=${PING_TARGET:-"1.1.1.1"}
+
+log "[Start] Installation de watchdog"
+SYSCTL_CONF="/etc/sysctl.d/99-autoreboot.conf"
+if [ ! -f "$SYSCTL_CONF" ]; then
+    log "[+] Configuration des paramètres kernel d'auto-reboot..."
+    cat << 'EOF' > "$SYSCTL_CONF"
 kernel.panic = 10
 kernel.hung_task_timeout_secs = 120
 vm.panic_on_oom = 1
 EOF
-sysctl --system > /dev/null 2>&1
-apt-get update -qq > /dev/null
-apt-get install -y watchdog -qq > /dev/null
-cat << EOF > "$REPAIR_SCRIPT"
+    sysctl --system > /dev/null 2>&1
+else
+    log "[=] La configuration kernel auto-reboot existe déjà."
+fi
+if ! command -v watchdog &> /dev/null; then
+    log "[+] Installation du paquet watchdog..."
+    apt-get update -qq > /dev/null
+    apt-get install -y watchdog -qq > /dev/null
+else
+    log "[=] Le paquet watchdog est déjà installé."
+fi
+mkdir -p "$(dirname "$REPAIR_SCRIPT")"
+if [ ! -f "$REPAIR_SCRIPT" ]; then
+    log "[+] Création du script de réparation : $REPAIR_SCRIPT"
+    cat << EOF > "$REPAIR_SCRIPT"
 #!/bin/bash
 exec 1>/dev/null
 exec 2>&1
-LOG_DIR="/etc/AubeZero/Mnemosyne"
-LOG_FILE="\$LOG_DIR/\$(date +%Y-%m).log"
 Programme="Cerbere-NetworkRepair"
+
+# === Function de log === #
 log() {
-    echo "\$(date +'%Y%m%d%H:%M')-\${Programme}-\$1" >> "\$LOG_FILE"
+    Programme="Cerbere-Install"
+    mkdir -p "/etc/AubeZero/Mnemosyne/" > /dev/null
+    echo "$(date +'%Y%m%d%H:%M')-${Programme}-$1" >> "/etc/AubeZero/Mnemosyne/$(date +%Y-%m).log"
 }
+
 log "[WATCHDOG] Perte de connexion détectée. Redémarrage de systemd-networkd"
 systemctl restart systemd-networkd
 sleep 5
@@ -123,15 +143,21 @@ if ping -c 1 -W 2 $PING_TARGET > /dev/null 2>&1; then
     log "[WATCHDOG] Connexion réseau rétablie avec succès."
     exit 0
 else
-    log "Échec du rétablissement. Le serveur va rebooter." 
+    log "[WATCHDOG] Échec du rétablissement. Le serveur va rebooter." 
     exit 1
 fi
 EOF
-chmod +x "$REPAIR_SCRIPT" > /dev/null
-if [ ! -f /etc/watchdog.conf.bak ]; then
-    cp /etc/watchdog.conf /etc/watchdog.conf.bak > /dev/null
+    chmod +x "$REPAIR_SCRIPT" > /dev/null
+else
+    log "[=] Le script de réparation réseau existe déjà."
 fi
-cat << EOF > /etc/watchdog.conf
+WATCHDOG_CONF="/etc/watchdog.conf"
+if [ ! -f "$WATCHDOG_CONF" ] || [ ! -f "${WATCHDOG_CONF}.bak" ]; then
+    if [ -f "$WATCHDOG_CONF" ] && [ ! -f "${WATCHDOG_CONF}.bak" ]; then
+        cp "$WATCHDOG_CONF" "${WATCHDOG_CONF}.bak" > /dev/null
+    fi
+    log "[+] Configuration initiale de $WATCHDOG_CONF..."
+    cat << EOF > "$WATCHDOG_CONF"
 watchdog-device = /dev/watchdog
 max-load-1 = $MAX_LOAD
 min-memory = $MIN_MEM
@@ -140,11 +166,18 @@ ping-retry = 3
 repair-binary = $REPAIR_SCRIPT
 repair-timeout = 30
 EOF
+else
+    log "[=] Le fichier $WATCHDOG_CONF existe déjà. Configuration conservée."
+fi
 systemctl enable watchdog --now > /dev/null 2>&1
-log "Installation et configuration du watchdog : SUCCESS"
+log "[STOP] - Installation et configuration du watchdog"
+
+
+
+
+
 
 # === Cration du credentials === #
-
 log "Installation et configuration des credentials : PENDING"
 DEST_FILE="$CERBERE_DIR/credentials.sh"
 RECENT_CREDENTIALS=$(find / -type f -name "credentials.sh" \
