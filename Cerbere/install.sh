@@ -10,12 +10,15 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+log() {
+    Programme="Cerbere-Install"
+    mkdir -p "/etc/AubeZero/Mnemosyne/" > /dev/null
+    echo "$(date +'%Y%m%d%H:%M')-${Programme}-$1" >> "/etc/AubeZero/Mnemosyne/$(date +%Y-%m).log"
+}
+
 # === Définition des variables === #
 
 BASE_DIR="/etc/AubeZero"
-LOG_DIR="$BASE_DIR/Mnemosyne"
-LOG_FILE="$LOG_DIR/$(date +%Y-%m).log"
-Programme="Cerbere-Install"
 CERBERE_DIR="/etc/AubeZero/Cerbere"
 BASE_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main"
 PING_TARGET="192.168.1.1"
@@ -25,20 +28,45 @@ REPAIR_SCRIPT="$CERBERE_DIR/fix-network.sh"
 CONFIG_FILE="/etc/glances/glances.conf"
 
 # === Création des dossiers === #
+mkdir -P "$BASE_DIR" > /dev/null
+mkdir -p "$CERBERE_DIR" > /dev/null
 
-mkdir -p "$LOG_DIR" "$CERBERE_DIR" > /dev/null
-
-# === Fonction de log === #
-log() {
-    echo "$(date +'%Y%m%d%H:%M')-${Programme}-$1" >> "$LOG_FILE"
-}
 
 # === Installation de Glances via pip === #
-log "Installation de Glances : PENDING"
-pip3 install glances[all] > /dev/null
-mkdir -p /etc/glances
-
-cat << EOF > "$CONFIG_FILE"
+log "[START] Installation de Glances."
+if ! command -v python3 &> /dev/null || ! command -v pip3 &> /dev/null; then
+    log "[+] Détection de paquets manquants (python3/pip3). Tentative d'installation..."  
+    if command -v apt-get &> /dev/null; then
+        sudo apt-get update -y > /dev/null
+        sudo apt-get install -y python3 python3-pip python3-full > /dev/null 2>&1
+    elif command -v dnf &> /dev/null; then
+        sudo dnf install -y python3 python3-pip > /dev/null 2>&1
+    elif command -v yum &> /dev/null; then
+        sudo yum install -y python3 python3-pip > /dev/null 2>&1
+    else
+        log "[!] Erreur : Impossible de déterminer le gestionnaire de paquets (apt, dnf, yum)."
+        log "[!] Veuillez installer 'python3' et 'python3-pip' manuellement."
+        exit 1
+    fi
+fi
+if ! command -v python3 &> /dev/null || ! command -v pip3 &> /dev/null; then
+    log "[!] Erreur : Les prérequis Python 3 / pip3 n'ont pas pu être installés."
+    exit 1
+fi
+log "[+] Prérequis validés."
+if command -v glances &> /dev/null; then
+    log "[=] Glances est déjà installé. Passage de l'étape d'installation."
+else
+    log "[+] Installation des dépendances et de Glances via pip3..."
+    # Utilisation de --break-system-packages si nécessaire (Debian 12+ / Ubuntu 23.04+)
+    pip3 install glances[all] --break-system-packages > /dev/null 2>&1 || pip3 install glances[all] > /dev/null 2>&1
+fi
+mkdir -p /etc/glances > /dev/null
+if [ -f "$CONFIG_FILE" ]; then
+    log "[=] Le fichier de configuration $CONFIG_FILE existe déjà. Aucune modification apportée."
+else
+    log "[+] Fichier de configuration absent. Génération de $CONFIG_FILE..."
+    cat << EOF > "$CONFIG_FILE"
 [global]
 bind_address = 0.0.0.0
 refresh = 2
@@ -59,25 +87,14 @@ show_children = False
 # Active les sondes matérielles
 enable = True
 EOF
+fi
 
-# === Création du service systemd === #
-cat << EOF > /etc/systemd/system/glances.service
-[Unit]
-Description=Glances Monitoring Tool
-After=network.target
-
-[Service]
-ExecStart=/usr/local/bin/glances -C /etc/glances/glances.conf -w
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-systemctl daemon-reload
-systemctl enable glances --now
-
-log "Installation de Glances : SUCCESS"
+if [ -f "$CONFIG_FILE" ] && command -v glances &> /dev/null; then
+    log "[+] Glances est opérationnel avec son fichier de configuration."
+else
+    log "[!] Erreur lors de la validation finale de l'installation."
+fi
+log "[STOP] Installation de Glances."
 
 # === Installation du Watchdog === #
 log "Installation et configuration du watchdog : PENDING"
