@@ -51,7 +51,7 @@ PortGitea=
 PortKiwix=
 PortKolibri=
 PortCyberChef=
-PortVault=
+PortVaultwarden=
 
 PathDocker="${PathRunable}/Docker/"
 PathLamp="${PathDocker}/Lamp-Data"
@@ -79,4 +79,4 @@ PathSiYuan="${PathDocker}/SiYuan-Data/"
 PathKiwix="${PathDocker}/Kiwix-Data/"
 PathGitea="${PathDocker}/Gitea-Data/"
 PathKolibri="${PathDocker}/Kolibri-Data/"
-PathVault="${PathDocker}/Vault-Data/"
+PathVaultWarden="${PathDocker}/Vault-Data/"
