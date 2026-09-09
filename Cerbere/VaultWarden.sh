@@ -28,8 +28,8 @@ fi
 
 # --- Vérification variables requises ---
 missing_vars=0
-grep -qE '^[[:space:]]*vaultwarden_port=' "$CRED_FILE" || { log "[-] Variable vaultwarden_port absente du fichier."; missing_vars=1; }
-grep -qE '^[[:space:]]*vaultwarden_data=' "$CRED_FILE" || { log "[-] Variable vaultwarden_data absente du fichier."; missing_vars=1; }
+grep -qE '^[[:space:]]*PortVaultwarden=' "$CRED_FILE" || { log "[-] Variable PortVaultwarden absente du fichier."; missing_vars=1; }
+grep -qE '^[[:space:]]*PathVaultWarden=' "$CRED_FILE" || { log "[-] Variable PathVaultWarden absente du fichier."; missing_vars=1; }
 grep -qE '^[[:space:]]*PublicDns=' "$CRED_FILE" || { log "[-] Variable PublicDns absente du fichier."; missing_vars=1; }
 
 if [[ "$missing_vars" -ne 0 ]]; then
