@@ -66,22 +66,22 @@ else
 fi
 
 # --- Vérification port ---
-if ss -tuln | grep -q ":${vaultwarden_port}"; then
-    log "[-] Le port $vaultwarden_port est déjà utilisé."
+if ss -tuln | grep -q ":${PortVaultwarden}"; then
+    log "[-] Le port $PortVaultwarden est déjà utilisé."
     exit 1
 fi
 
 # --- Vérification dossier data ---
-if [[ ! -d "$vaultwarden_data" ]]; then
-    log "[-] Le chemin $vaultwarden_data n'existe pas."
+if [[ ! -d "$PathVaultWarden" ]]; then
+    log "[-] Le chemin $PathVaultWarden n'existe pas."
     exit 1
 fi
 
 # --- SSL : création + vérification ---
-sudo mkdir -p "$vaultwarden_data/ssl"
+sudo mkdir -p "$PathVaultWarden/ssl"
 
-SSL_KEY="$vaultwarden_data/ssl/filename.key"
-SSL_CRT="$vaultwarden_data/ssl/filename.crt"
+SSL_KEY="$PathVaultWarden/ssl/filename.key"
+SSL_CRT="$PathVaultWarden/ssl/filename.crt"
 
 if [[ -f "$SSL_KEY" || -f "$SSL_CRT" ]]; then
     log "[-] Certificat SSL déjà présent : $SSL_KEY ou $SSL_CRT"
@@ -109,8 +109,8 @@ sudo docker run -d \
     --name vaultwarden \
     -e ROCKET_TLS="{certs=\"/data/ssl/filename.crt\",key=\"/data/ssl/filename.key\"}" \
     -e WEBSOCKET_ENABLED=true \
-    -v "$vaultwarden_data":/data \
-    -p "$vaultwarden_port":80 \
+    -v "$PathVaultWarden":/data \
+    -p "$PortVaultwarden":80 \
     -p 3012:3012 \
     --restart unless-stopped \
     vaultwarden/server:latest
