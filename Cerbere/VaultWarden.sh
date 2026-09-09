@@ -20,7 +20,7 @@ log() {
 }
 
 # --- Vérification fichier credentials ---
-CRED_FILE="/etc/AubeZero/Credentials.sh"
+CRED_FILE="/etc/AubeZero/Cerbere/Credentials.sh"
 if [[ ! -f "$CRED_FILE" ]]; then
     log "[-] Le fichier $CRED_FILE est introuvable."
     exit 1
