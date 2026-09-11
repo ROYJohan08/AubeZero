@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CREDENTIALS_FILE="/etc/AubeZero/Cerbere/credentials.sh"
+CREDENTIALS_FILE="/etc/AubeZero/Cerbere/credentials_data.sh"
 if [[ -f "$CREDENTIALS_FILE" ]]; then
     source "$CREDENTIALS_FILE"
 else
