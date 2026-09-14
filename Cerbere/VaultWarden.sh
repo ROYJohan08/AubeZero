@@ -16,6 +16,10 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+# --- Variables Vaultwarden (fixes, non issues du credentials) ---
+vaultwarden_port=1013
+vaultwarden_data="/media/Runable/Docker/VaultWarden"
+
 # --- Vérification Docker ---
 check_docker() {
     if ! command -v docker >/dev/null 2>&1; then
@@ -28,63 +32,53 @@ check_docker() {
 # --- Création de Vaultwarden ---
 create_vaultwarden() {
     check_docker
-
     log "[~] Création de Vaultwarden..."
-
+    mkdir -p "$vaultwarden_data"
     docker run -d \
         --name vaultwarden \
         --restart unless-stopped \
-        -v /srv/vaultwarden:/data \
-        -p 8081:80 \
+        -v "$vaultwarden_data:/data" \
+        -p "${vaultwarden_port}:80" \
         vaultwarden/server:latest
-
     log "[+] Vaultwarden créé et démarré."
-
     install_vaultwarden_command
 }
 
 # --- Installation de la commande vaultwarden ---
 install_vaultwarden_command() {
     COMMAND_PATH="/usr/local/bin/vaultwarden"
-
     cat > "$COMMAND_PATH" << 'EOF'
 #!/bin/bash
 set -euo pipefail
-
 log() {
     Programme="Cerbere-VaultWarden"
     mkdir -p "/etc/AubeZero/Mnemosyne/" > /dev/null
     echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "/etc/AubeZero/Mnemosyne/$(date +%Y-%m).log"
 }
-
 check_docker() {
     if ! command -v docker >/dev/null 2>&1; then
         log "[-] Docker n'est pas installé."
         exit 1
     fi
 }
-
 start_vaultwarden() {
     check_docker
     docker start vaultwarden >/dev/null 2>&1 \
         && log "[+] Vaultwarden démarré." \
         || log "[-] Impossible de démarrer Vaultwarden."
 }
-
 stop_vaultwarden() {
     check_docker
     docker stop vaultwarden >/dev/null 2>&1 \
         && log "[+] Vaultwarden arrêté." \
         || log "[-] Impossible d'arrêter Vaultwarden."
 }
-
 restart_vaultwarden() {
     check_docker
     docker restart vaultwarden >/dev/null 2>&1 \
         && log "[+] Vaultwarden redémarré." \
         || log "[-] Impossible de redémarrer Vaultwarden."
 }
-
 update_vaultwarden() {
     check_docker
     log "[~] Mise à jour Vaultwarden..."
@@ -92,7 +86,6 @@ update_vaultwarden() {
     docker rm -f vaultwarden >/dev/null 2>&1 || true
     log "[+] Nouvelle image téléchargée."
 }
-
 status_vaultwarden() {
     if docker ps | grep -q vaultwarden; then
         log "[+] Vaultwarden est en cours d'exécution."
@@ -102,7 +95,6 @@ status_vaultwarden() {
         echo "Vaultwarden est arrêté."
     fi
 }
-
 case "${1:-none}" in
     start) start_vaultwarden ;;
     stop) stop_vaultwarden ;;
@@ -115,7 +107,6 @@ case "${1:-none}" in
         ;;
 esac
 EOF
-
     chmod +x "$COMMAND_PATH"
     log "[+] Commande vaultwarden installée."
 }
