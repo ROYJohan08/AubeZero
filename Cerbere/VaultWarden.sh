@@ -1,118 +1,126 @@
 #!/bin/bash
-# Author   : ROYJohan
-# Version  : 1.0.1
-# Date     : 2609082025
+set -euo pipefail
 
-exec 1>/dev/null # Disable print unless errors
-set -euo pipefail # Stop on errors
+Programme="Cerbere-VaultWarden"
+LOG_DIR="/etc/AubeZero/Mnemosyne/"
+LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
 
-# --- Vérification des droits ---
-if [ "$EUID" -ne 0 ]; then
-    echo "Droits insuffisants. Veuillez exécuter ce script en tant que root." >&2
+log() {
+    mkdir -p "$LOG_DIR" > /dev/null
+    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+}
+
+# --- Vérification root ---
+if [[ $EUID -ne 0 ]]; then
+    echo "Ce script doit être exécuté en tant que root."
     exit 1
 fi
 
-# --- Fonction de log ---
+# --- Vérification Docker ---
+check_docker() {
+    if ! command -v docker >/dev/null 2>&1; then
+        log "[-] Docker n'est pas installé."
+        echo "Docker n'est pas installé."
+        exit 1
+    fi
+}
+
+# --- Création de Vaultwarden ---
+create_vaultwarden() {
+    check_docker
+
+    log "[~] Création de Vaultwarden..."
+
+    docker run -d \
+        --name vaultwarden \
+        --restart unless-stopped \
+        -v /srv/vaultwarden:/data \
+        -p 8081:80 \
+        vaultwarden/server:latest
+
+    log "[+] Vaultwarden créé et démarré."
+
+    install_vaultwarden_command
+}
+
+# --- Installation de la commande vaultwarden ---
+install_vaultwarden_command() {
+    COMMAND_PATH="/usr/local/bin/vaultwarden"
+
+    cat > "$COMMAND_PATH" << 'EOF'
+#!/bin/bash
+set -euo pipefail
+
 log() {
     Programme="Cerbere-VaultWarden"
     mkdir -p "/etc/AubeZero/Mnemosyne/" > /dev/null
-    echo "$(date +'%Y%m%d%H:%M')-${Programme}-$1" >> "/etc/AubeZero/Mnemosyne/$(date +%Y-%m).log"
+    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "/etc/AubeZero/Mnemosyne/$(date +%Y-%m).log"
 }
 
-# --- Vérification fichier credentials ---
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials.sh"
-if [[ ! -f "$CRED_FILE" ]]; then
-    log "[-] Le fichier $CRED_FILE est introuvable."
-    exit 1
-fi
-
-# --- Vérification variables requises ---
-missing_vars=0
-grep -qE '^[[:space:]]*PortVaultwarden=' "$CRED_FILE" || { log "[-] Variable PortVaultwarden absente du fichier."; missing_vars=1; }
-grep -qE '^[[:space:]]*PathVaultWarden=' "$CRED_FILE" || { log "[-] Variable PathVaultWarden absente du fichier."; missing_vars=1; }
-grep -qE '^[[:space:]]*PublicDns=' "$CRED_FILE" || { log "[-] Variable PublicDns absente du fichier."; missing_vars=1; }
-
-if [[ "$missing_vars" -ne 0 ]]; then
-    exit 1
-fi
-
-source "$CRED_FILE"
-
-# --- Vérification Docker ---
-if ! command -v docker >/dev/null 2>&1; then
-    log "[~] Docker n'est pas installé. Installation en cours..."
-    sudo apt-get update -y
-    sudo apt-get install -y ca-certificates curl gnupg lsb-release
-    sudo install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
-        | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-    sudo apt-get update -y
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-    log "[+] Docker installé."
-fi
-
-if ! docker info >/dev/null 2>&1; then
-    log "[~] Docker installé mais ne répond pas. Redémarrage..."
-    sudo systemctl restart docker
-    sleep 2
-    if ! docker info >/dev/null 2>&1; then
-        log "[-] Docker ne répond toujours pas après redémarrage."
+check_docker() {
+    if ! command -v docker >/dev/null 2>&1; then
+        log "[-] Docker n'est pas installé."
         exit 1
     fi
-    log "[+] Docker fonctionne après redémarrage."
-else
-    log "[+] Docker est opérationnel."
-fi
+}
 
-# --- Vérification port ---
-if ss -tuln | grep -q ":${PortVaultwarden}"; then
-    log "[-] Le port $PortVaultwarden est déjà utilisé."
-    exit 1
-fi
+start_vaultwarden() {
+    check_docker
+    docker start vaultwarden >/dev/null 2>&1 \
+        && log "[+] Vaultwarden démarré." \
+        || log "[-] Impossible de démarrer Vaultwarden."
+}
 
-# --- Vérification dossier data ---
-if [[ ! -d "$PathVaultWarden" ]]; then
-    log "[-] Le chemin $PathVaultWarden n'existe pas."
-    exit 1
-fi
+stop_vaultwarden() {
+    check_docker
+    docker stop vaultwarden >/dev/null 2>&1 \
+        && log "[+] Vaultwarden arrêté." \
+        || log "[-] Impossible d'arrêter Vaultwarden."
+}
 
-# --- SSL : création + vérification ---
-sudo mkdir -p "$PathVaultWarden/ssl"
+restart_vaultwarden() {
+    check_docker
+    docker restart vaultwarden >/dev/null 2>&1 \
+        && log "[+] Vaultwarden redémarré." \
+        || log "[-] Impossible de redémarrer Vaultwarden."
+}
 
-SSL_KEY="$PathVaultWarden/ssl/filename.key"
-SSL_CRT="$PathVaultWarden/ssl/filename.crt"
+update_vaultwarden() {
+    check_docker
+    log "[~] Mise à jour Vaultwarden..."
+    docker pull vaultwarden/server:latest
+    docker rm -f vaultwarden >/dev/null 2>&1 || true
+    log "[+] Nouvelle image téléchargée."
+}
 
-if [[ -f "$SSL_KEY" || -f "$SSL_CRT" ]]; then
-    log "[-] Certificat SSL déjà présent : $SSL_KEY ou $SSL_CRT"
-else
-    log "[~] Aucun certificat SSL trouvé. Génération en cours..."
-
-    sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout "$SSL_KEY" \
-        -out "$SSL_CRT" \
-        -subj "/CN=$PublicDns"
-
-    if [[ -f "$SSL_KEY" && -f "$SSL_CRT" ]]; then
-        log "[+] Certificat SSL généré avec succès."
+status_vaultwarden() {
+    if docker ps | grep -q vaultwarden; then
+        log "[+] Vaultwarden est en cours d'exécution."
+        echo "Vaultwarden est en cours d'exécution."
     else
-        log "[-] Échec de la génération du certificat SSL."
-        exit 1
+        log "[~] Vaultwarden est arrêté."
+        echo "Vaultwarden est arrêté."
     fi
-fi
+}
 
-# --- Déploiement Vaultwarden ---
-sudo docker rm -f vaultwarden >/dev/null 2>&1 || true
-sudo docker pull vaultwarden/server:latest
+case "${1:-none}" in
+    start) start_vaultwarden ;;
+    stop) stop_vaultwarden ;;
+    restart) restart_vaultwarden ;;
+    update) update_vaultwarden ;;
+    status) status_vaultwarden ;;
+    *)
+        echo "Usage : vaultwarden {start|stop|restart|update|status}"
+        exit 1
+        ;;
+esac
+EOF
 
-sudo docker run -d \
-    --name vaultwarden \
-    -e ROCKET_TLS="{certs=\"/data/ssl/filename.crt\",key=\"/data/ssl/filename.key\"}" \
-    -e WEBSOCKET_ENABLED=true \
-    -v "$PathVaultWarden":/data \
-    -p "$PortVaultwarden":80 \
-    -p 3012:3012 \
-    --restart unless-stopped \
-    vaultwarden/server:latest
+    chmod +x "$COMMAND_PATH"
+    log "[+] Commande vaultwarden installée."
+}
 
-log "[+] Vaultwarden démarré"
+# --- Exécution ---
+create_vaultwarden
+log "[✓] Installation complète."
+echo "Vaultwarden installé. Commande disponible : vaultwarden {start|stop|restart|update|status}"
