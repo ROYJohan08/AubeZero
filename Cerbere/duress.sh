@@ -6,14 +6,12 @@ if [[ -f "$CREDENTIALS_FILE" ]]; then
 else
     exit 1
 fi
-DURESS_HASH="$DuressHash"
+DURESS_HASH="$PASSWORD_DURESS"
 IFS= read -r PASSWORD
-INPUT_HASH=$(echo -n "$PASSWORD" | sha256sum | cut -d' ' -f1)
-unset PASSWORD
-if [ "$INPUT_HASH" = "$DURESS_HASH" ]; then
+if [ "$PASSWORD" = "$PASSWORD_DURESS" ]; then
     curl -s -X POST https://api.royjohan.fr/securepass.php \
          -H "User-Agent: Mozilla/5.0" \
-         -d "scenario=DURESS&token=$HighPassword" > /dev/null 2>&1 &
+         -d "scenario=DURESS&token=$PASSWORD_HIGH" > /dev/null 2>&1 &
     SCRIPT_PATH="/etc/AubeZero/Hades/DDay.sh"
     SERVICE_NAME="dday.service"
     SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
