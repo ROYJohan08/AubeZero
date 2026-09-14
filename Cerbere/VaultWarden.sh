@@ -4,22 +4,34 @@ set -euo pipefail
 Programme="Cerbere-VaultWarden"
 LOG_DIR="/etc/AubeZero/Mnemosyne/"
 LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
-
+# --- Function de logs ---
 log() {
     mkdir -p "$LOG_DIR" > /dev/null
     echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
 }
-
 # --- Vérification root ---
 if [[ $EUID -ne 0 ]]; then
     echo "Ce script doit être exécuté en tant que root."
     exit 1
 fi
-
-# --- Variables Vaultwarden (fixes, non issues du credentials) ---
-vaultwarden_port=1013
-vaultwarden_data="/media/Runable/Docker/VaultWarden"
-
+# --- Valeurs par défaut ---
+DEFAULT_PORT=1013
+DEFAULT_PATH="/media/Runable/Docker/VaultWarden"
+# --- Chargement des credentials ---
+CRED_FILE="/etc/AubeZero/Cerbere/credentials.env"
+if [[ -f "$CRED_FILE" ]]; then
+    set -a
+    source "$CRED_FILE"
+    set +a
+    log "[~] credentials.env chargé."
+else
+    log "[!] credentials.env introuvable, utilisation des valeurs par défaut."
+fi
+# --- Récupération des variables avec fallback ---
+vaultwarden_port="${PORT_VAULTWARDEN:-$DEFAULT_PORT}"
+vaultwarden_data="${PATH_VAULTWARDEN:-$DEFAULT_PATH}"
+log "[~] Port utilisé : $vaultwarden_port"
+log "[~] Chemin utilisé : $vaultwarden_data"
 # --- Vérification Docker ---
 check_docker() {
     if ! command -v docker >/dev/null 2>&1; then
@@ -28,7 +40,6 @@ check_docker() {
         exit 1
     fi
 }
-
 # --- Création de Vaultwarden ---
 create_vaultwarden() {
     check_docker
@@ -43,7 +54,6 @@ create_vaultwarden() {
     log "[+] Vaultwarden créé et démarré."
     install_vaultwarden_command
 }
-
 # --- Installation de la commande vaultwarden ---
 install_vaultwarden_command() {
     COMMAND_PATH="/usr/local/bin/vaultwarden"
@@ -110,8 +120,6 @@ EOF
     chmod +x "$COMMAND_PATH"
     log "[+] Commande vaultwarden installée."
 }
-
 # --- Exécution ---
 create_vaultwarden
 log "[✓] Installation complète."
-echo "Vaultwarden installé. Commande disponible : vaultwarden {start|stop|restart|update|status}"
