@@ -20,11 +20,11 @@ log() {
 }
 
 # --- Vérification fichier credentials ---
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials_data.sh"
+CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
 if [[ ! -f "$CRED_FILE" ]]; then
     log "[~] Le fichier $CRED_FILE est introuvable."
 
-    RECENT_CREDENTIALS=$(find / -type f -name "credentials_data.sh" \
+    RECENT_CREDENTIALS=$(find / -type f -name "credentials.env" \
         -not -path "/proc/*" \
         -not -path "/sys/*" \
         -not -path "/dev/*" \
@@ -38,7 +38,7 @@ if [[ ! -f "$CRED_FILE" ]]; then
         log "[~] Le fichier $CRED_FILE est introuvable dans le système."
 
         if ! curl --fail --silent --show-error -o "$CRED_FILE" \
-            "https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main/Cerbere/credentials_placeholder.sh"; then
+            "https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main/Cerbere/credentials.env"; then
             log "[-] Téléchargement depuis le net impossible"
             exit 1
         fi
