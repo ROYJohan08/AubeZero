@@ -2,13 +2,7 @@
 exec 1>/dev/null
 set -euo pipefail
 
-# --- Vérification des droits ---
-if [[ "$EUID" -ne 0 ]]; then
-    echo "Droits insuffisants. Veuillez exécuter ce script en tant que root." >&2
-    exit 1
-fi
-
-# --- Fonction de log ---
+# --- LOG ---
 log() {
     local Programme="Cerbere-Credential"
     local LOG_DIR="/etc/AubeZero/Mnemosyne"
@@ -16,65 +10,93 @@ log() {
     echo "$(date +'%Y%m%d%H:%M')-${Programme}-$1" >> "${LOG_DIR}/$(date +%Y-%m).log"
 }
 
-# --- Vérification fichier credentials ---
+# --- DÉBUT ---
+log "[👉] Début du programme"
+
+# --- Vérification des droits ---
+if [[ "$EUID" -ne 0 ]]; then
+    log "[-] Droits insuffisants : exécution non-root"
+    exit 1
+fi
+log "[+] Droits root confirmés"
+
+# --- Dossiers nécessaires uniquement ---
+mkdir -p "/etc/AubeZero/Cerbere"
+mkdir -p "/etc/AubeZero/Mnemosyne"
+log "[+] Dossiers essentiels vérifiés"
+
+# --- Fichier credentials ---
 CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
 
+# --- Vérification existence credentials ---
 if [[ ! -f "$CRED_FILE" ]]; then
-    log "[~] Le fichier $CRED_FILE est introuvable."
+    log "[~] Credentials introuvable : recherche locale"
 
-    # Recherche du fichier le plus récent
     RECENT_CREDENTIALS=$(find / -type f -name "credentials.env" \
         -not -path "/proc/*" \
         -not -path "/sys/*" \
         -not -path "/dev/*" \
-        -not -path "$CRED_FILE" \
         -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1 | cut -d' ' -f2-)
 
     if [[ -n "${RECENT_CREDENTIALS:-}" && -f "$RECENT_CREDENTIALS" ]]; then
         cp "$RECENT_CREDENTIALS" "$CRED_FILE"
-        log "[+] $CRED_FILE copié depuis $RECENT_CREDENTIALS"
+        log "[+] Copie locale depuis $RECENT_CREDENTIALS"
     else
-        log "[~] Aucun credentials.env trouvé localement."
+        log "[~] Aucun fichier local trouvé : tentative GitHub"
 
-        # Téléchargement depuis GitHub
         if ! curl --fail --silent --show-error -o "$CRED_FILE" \
             "https://raw.githubusercontent.com/ROYJohan08/AubeZero/main/Cerbere/credentials.env"; then
-            log "[-] Téléchargement impossible"
+            log "[-] Téléchargement GitHub impossible : arrêt"
             exit 1
         fi
+
+        log "[+] Fichier GitHub récupéré"
     fi
 
-    # Permissions strictes
     chown root:root "$CRED_FILE"
     chmod 600 "$CRED_FILE"
+    log "[+] Permissions sécurisées appliquées"
 fi
 
-# --- Chargement du fichier local ---
+# --- Chargement du fichier ---
 if [[ -f "$CRED_FILE" ]]; then
     source "$CRED_FILE"
     log "[+] Credentials chargés"
 else
-    log "[-] Erreur : le fichier n'existe toujours pas après récupération."
+    log "[-] Credentials absent après tentative de récupération : arrêt"
     exit 1
 fi
 
-# --- Synchronisation avec GitHub : ajout des variables manquantes ---
-log "[~] Vérification des variables manquantes via GitHub"
+# --- Synchronisation GitHub ---
+log "[~] Synchronisation des variables via GitHub"
+
 TMP_GITHUB="/tmp/credentials_github.env"
+
 if curl --fail --silent --show-error \
     -o "$TMP_GITHUB" \
     "https://raw.githubusercontent.com/ROYJohan08/AubeZero/main/Cerbere/credentials.env"; then
+
     log "[+] Fichier GitHub récupéré pour comparaison"
+
     while IFS= read -r line; do
         [[ -z "$line" || "$line" =~ ^# ]] && continue
+
         var_name="${line%%=*}"
+
         if ! grep -q "^${var_name}=" "$CRED_FILE"; then
             echo "$line" >> "$CRED_FILE"
             log "[+] Variable ajoutée : $var_name"
         fi
+
     done < "$TMP_GITHUB"
+
     rm -f "$TMP_GITHUB"
     log "[+] Synchronisation terminée"
+
 else
-    log "[-] Impossible de récupérer le fichier GitHub pour synchronisation"
+    log "[-] Impossible de récupérer GitHub pour synchronisation : arrêt"
+    exit 1
 fi
+
+# --- FIN ---
+log "[✓] Fin du programme"
