@@ -2,109 +2,180 @@
 set -euo pipefail
 
 Programme="Cerbere-VaultWarden"
-LOG_DIR="/etc/AubeZero/Mnemosyne/"
+LOG_DIR="/etc/AubeZero/Mnemosyne"
 LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
-# --- Function de logs ---
+
+# --- Fonction de logs ---
 log() {
     mkdir -p "$LOG_DIR" > /dev/null
     echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
 }
+
+log "[👉] Début du programme"
+
 # --- Vérification root ---
 if [[ $EUID -ne 0 ]]; then
-    echo "Ce script doit être exécuté en tant que root."
+    log "[-] Ce script doit être exécuté en tant que root."
     exit 1
 fi
+log "[+] Droits root confirmés"
+
 # --- Valeurs par défaut ---
 DEFAULT_PORT=1013
 DEFAULT_PATH="/media/Runable/Docker/VaultWarden"
+
 # --- Chargement des credentials ---
 CRED_FILE="/etc/AubeZero/Cerbere/credentials.env"
+
 if [[ -f "$CRED_FILE" ]]; then
     set -a
     source "$CRED_FILE"
     set +a
-    log "[~] credentials.env chargé."
+    log "[~] credentials.env chargé"
 else
-    log "[!] credentials.env introuvable, utilisation des valeurs par défaut."
+    log "[~] credentials.env introuvable : utilisation des valeurs par défaut"
 fi
+
 # --- Récupération des variables avec fallback ---
 vaultwarden_port="${PORT_VAULTWARDEN:-$DEFAULT_PORT}"
 vaultwarden_data="${PATH_VAULTWARDEN:-$DEFAULT_PATH}"
+
 log "[~] Port utilisé : $vaultwarden_port"
 log "[~] Chemin utilisé : $vaultwarden_data"
+
+# --- Installation Docker si absent ---
+install_docker() {
+    log "[~] Installation de Docker..."
+
+    # Mise à jour des dépôts
+    apt update -y >/dev/null 2>&1 || { log "[-] Impossible de mettre à jour apt"; exit 1; }
+
+    # Installation des dépendances
+    apt install -y ca-certificates curl gnupg lsb-release >/dev/null 2>&1 \
+        || { log "[-] Impossible d’installer les dépendances Docker"; exit 1; }
+
+    # Ajout de la clé Docker
+    install -m 0755 -d /etc/apt/keyrings >/dev/null 2>&1
+    curl -fsSL https://download.docker.com/linux/debian/gpg \
+        | gpg --dearmor -o /etc/apt/keyrings/docker.gpg >/dev/null 2>&1 \
+        || { log "[-] Impossible de récupérer la clé Docker"; exit 1; }
+
+    chmod a+r /etc/apt/keyrings/docker.gpg >/dev/null 2>&1
+
+    # Ajout du dépôt Docker
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/debian \
+      $(lsb_release -cs) stable" \
+      > /etc/apt/sources.list.d/docker.list
+
+    apt update -y >/dev/null 2>&1 || { log "[-] Impossible de mettre à jour apt après ajout du dépôt Docker"; exit 1; }
+
+    # Installation de Docker
+    apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null 2>&1 \
+        || { log "[-] Impossible d’installer Docker"; exit 1; }
+
+    log "[+] Docker installé avec succès"
+}
+
 # --- Vérification Docker ---
 check_docker() {
     if ! command -v docker >/dev/null 2>&1; then
-        log "[-] Docker n'est pas installé."
-        echo "Docker n'est pas installé."
-        exit 1
+        log "[~] Docker absent : installation"
+        install_docker
+    else
+        log "[+] Docker déjà installé"
     fi
 }
+
 # --- Création de Vaultwarden ---
 create_vaultwarden() {
     check_docker
     log "[~] Création de Vaultwarden..."
+
     mkdir -p "$vaultwarden_data"
+
+    if docker ps -a --format '{{.Names}}' | grep -q "^vaultwarden$"; then
+        log "[~] Conteneur existant détecté : suppression"
+        docker rm -f vaultwarden >/dev/null 2>&1 || true
+    fi
+
     docker run -d \
         --name vaultwarden \
         --restart unless-stopped \
         -v "$vaultwarden_data:/data" \
         -p "${vaultwarden_port}:80" \
         vaultwarden/server:latest
-    log "[+] Vaultwarden créé et démarré."
+
+    log "[+] Vaultwarden créé et démarré"
     install_vaultwarden_command
 }
+
 # --- Installation de la commande vaultwarden ---
 install_vaultwarden_command() {
+    log "[~] Installation de la commande vaultwarden"
+
     COMMAND_PATH="/usr/local/bin/vaultwarden"
+
     cat > "$COMMAND_PATH" << 'EOF'
 #!/bin/bash
 set -euo pipefail
+
+Programme="Cerbere-VaultWarden"
+LOG_DIR="/etc/AubeZero/Mnemosyne"
+LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+
 log() {
-    Programme="Cerbere-VaultWarden"
-    mkdir -p "/etc/AubeZero/Mnemosyne/" > /dev/null
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "/etc/AubeZero/Mnemosyne/$(date +%Y-%m).log"
+    mkdir -p "$LOG_DIR" > /dev/null
+    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
 }
+
 check_docker() {
     if ! command -v docker >/dev/null 2>&1; then
-        log "[-] Docker n'est pas installé."
+        log "[-] Docker n'est pas installé"
         exit 1
     fi
 }
+
 start_vaultwarden() {
     check_docker
     docker start vaultwarden >/dev/null 2>&1 \
-        && log "[+] Vaultwarden démarré." \
-        || log "[-] Impossible de démarrer Vaultwarden."
+        && log "[+] Vaultwarden démarré" \
+        || log "[-] Impossible de démarrer Vaultwarden"
 }
+
 stop_vaultwarden() {
     check_docker
     docker stop vaultwarden >/dev/null 2>&1 \
-        && log "[+] Vaultwarden arrêté." \
-        || log "[-] Impossible d'arrêter Vaultwarden."
+        && log "[+] Vaultwarden arrêté" \
+        || log "[-] Impossible d'arrêter Vaultwarden"
 }
+
 restart_vaultwarden() {
     check_docker
     docker restart vaultwarden >/dev/null 2>&1 \
-        && log "[+] Vaultwarden redémarré." \
-        || log "[-] Impossible de redémarrer Vaultwarden."
+        && log "[+] Vaultwarden redémarré" \
+        || log "[-] Impossible de redémarrer Vaultwarden"
 }
+
 update_vaultwarden() {
     check_docker
     log "[~] Mise à jour Vaultwarden..."
-    docker pull vaultwarden/server:latest
+    docker pull vaultwarden/server:latest >/dev/null 2>&1
     docker rm -f vaultwarden >/dev/null 2>&1 || true
-    log "[+] Nouvelle image téléchargée."
+    log "[+] Nouvelle image téléchargée"
 }
+
 status_vaultwarden() {
     if docker ps | grep -q vaultwarden; then
-        log "[+] Vaultwarden est en cours d'exécution."
-        echo "Vaultwarden est en cours d'exécution."
+        log "[+] Vaultwarden est en cours d'exécution"
+        echo "Vaultwarden est en cours d'exécution"
     else
-        log "[~] Vaultwarden est arrêté."
-        echo "Vaultwarden est arrêté."
+        log "[~] Vaultwarden est arrêté"
+        echo "Vaultwarden est arrêté"
     fi
 }
+
 case "${1:-none}" in
     start) start_vaultwarden ;;
     stop) stop_vaultwarden ;;
@@ -117,9 +188,12 @@ case "${1:-none}" in
         ;;
 esac
 EOF
+
     chmod +x "$COMMAND_PATH"
-    log "[+] Commande vaultwarden installée."
+    log "[+] Commande vaultwarden installée"
 }
+
 # --- Exécution ---
 create_vaultwarden
-log "[✓] Installation complète."
+
+log "[✓] Fin du programme"
