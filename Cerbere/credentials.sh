@@ -1,8 +1,4 @@
 #!/bin/bash
-# Author   : ROYJohan
-# Version  : 1.0.0
-# Date     : 202609091047
-
 exec 1>/dev/null # Disable print unless errors
 set -euo pipefail # Stop on errors
 
