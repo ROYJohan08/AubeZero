@@ -1,183 +1,157 @@
 #!/bin/bash
+# install.sh
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 15/09/2026 14:00
+# @Desc : Installateur maître AubeZero (Cerbere, Apollon, Hermes, Agora, Hades)
 
-# === Vérification des droits administrateurs === #
-if [ "$EUID" -ne 0 ]; then 
-    echo "Droits insuffisants. Veuillez exécuter ce script en tant que root." >&2
+set -euo pipefail
+
+Programme="AubeZero-Installer"
+
+# === Vérification root === #
+if [[ $EUID -ne 0 ]]; then
+    echo "[-] Ce script doit être exécuté en root."
     exit 1
 fi
 
-# === Stop en cas d'erreurs === #
-set -euo pipefail
+# === Chargement credentials === #
+CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
+DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
 
-# === Définition des variables === #
-LOG_DIR="/etc/AubeZero/Mnemosyne"
-LOG_FILE="$LOG_DIR/$(date +%Y-%m).log"
-Programme="Apollon-Install"
-RSYNC_HOST="rsync://download.kiwix.org/zim/builds"
-ZIM_FILES=(
-    "devdocs_en_apache-http-server_2026-04.zim"
-    "devdocs_en_bash_2026-04.zim"
-    "devdocs_en_c_2026-04.zim"
-    "devdocs_en_cpp_2026-04.zim"
-    "devdocs_en_css_2026-04.zim"
-    "devdocs_en_docker_2026-04.zim"
-    "devdocs_en_git_2026-04.zim"
-    "devdocs_en_html_2026-04.zim"
-    "devdocs_en_javascript_2026-04.zim"
-    "devdocs_en_jquery_2026-04.zim"
-    "devdocs_en_man_2026-04.zim"
-    "devdocs_en_mariadb_2026-04.zim"
-    "devdocs_en_markdown_2026-04.zim"
-    "devdocs_en_postgresql_2026-05.zim"
-    "devdocs_en_python_2026-05.zim"
-    "devdocs_en_sqlite_2026-04.zim"
-    "devdocs_en_wordpress_2026-04.zim"
-    "doc.ubuntu-fr.org_fr_all_2026-05.zim"
-    "education-et-numerique_fr_all_2021-07.zim"
-    "phet_fr_all_2026-02.zim"
-    "pokepedia_fr_all_maxi_2026-04.zim"
-    "psiram_fr_all_maxi_2026-02.zim"
-    "scratch-wiki_fr_all_maxi_2021-02.zim"
-    "solar.lowtechmagazine.com_mul_all_2025-01.zim"
-    "wikipedia_fr_all_nopic_2026-02.zim"
-    "wikipedia_fr_chemistry_maxi_2026-04.zim"
-    "wikipedia_fr_computer_maxi_2026-04.zim"
-    "wikipedia_fr_geography_maxi_2026-04.zim"
-    "wikipedia_fr_history_maxi_2026-04.zim"
-    "wikipedia_fr_medicine_maxi_2026-04.zim"
-    "wikipedia_fr_physics_maxi_2026-04.zim"
-    "wikiquote_fr_all_maxi_2026-04.zim"
-    "wikivoyage_fr_all_maxi_2026-03.zim"
-    "wiktionary_fr_all_nopic_2026-05.zim"
-    "youscribe_fr_college_2024-05.zim"
-    "youscribe_fr_lycee_2024-05.zim"
-    "youscribe_fr_primaire_2024-05.zim"
-)
-BASE_DIR="/media/Docs01/Logiciels/StandaloneInstaller"
-WGET_FLAGS="-N -c -q --show-progress"
-USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-CREDENTIALS_FILE="/etc/RJIDomoNas/credentials.sh"
-
-# === Création du dossier === #
-mkdir -p "$LOG_DIR"
-mkdir -p "$PathDkKiwix"
-mkdir -p "$BASE_DIR"/{Firefox,Chrome,VLC,Jellyfin,HomeAssistant,Rufus,ImageGlass,PuTTY,FileZilla,NotepadPlusPlus,AnyDesk,LibreOffice,WinRAR,ISOs}
-mkdir -p "$BASE_DIR/Firefox/"{Windows,Mac,Linux,Android}
-mkdir -p "$BASE_DIR/Chrome/"{Windows,Mac,Linux}
-mkdir -p "$BASE_DIR/VLC/"{Windows,Mac,Android}
-mkdir -p "$BASE_DIR/Jellyfin/Android"
-mkdir -p "$BASE_DIR/HomeAssistant/Android"
-mkdir -p "$BASE_DIR/AnyDesk/"{Windows,Mac,Linux,Android}
-mkdir -p "$BASE_DIR/LibreOffice/"{Windows,Mac,Linux}
-mkdir -p "$BASE_DIR/ISOs/"{Ubuntu,Windows}
-
-# === Intégration des credentials === #
-
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Sourcage des credentials : PENDING" >> "$LOG_FILE"
-if [[ -f "$CREDENTIALS_FILE" ]]; then
-    source "$CREDENTIALS_FILE"
-	echo "$(date +'%Y%m%d%H:%M')-${Programme}-Sourcage des credentials : SUCCESS" >> "$LOG_FILE"
+if [[ -f "$CRED_FILE" ]]; then
+    set -a
+    source "$CRED_FILE"
+    set +a
 else
-    echo "$(date +'%Y%m%d%H:%M')-${Programme}-Sourcage des credentials : FAIL" >> "$LOG_FILE"
+    PATH_MNEMOSYNE=""
 fi
 
-# === Téléchargement des ZIM === #
+# === LOG SYSTEM === #
+if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
+    LOG_DIR="$PATH_MNEMOSYNE"
+else
+    LOG_DIR="$DEFAULT_LOG_DIR"
+fi
 
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des .zim : PENDING" >> "$LOG_FILE"
-for file in "${ZIM_FILES[@]}"; do
-    rsync -avP "$RSYNC_HOST/$file" "$PathDkKiwix/"
+mkdir -p "$LOG_DIR"
+LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+
+log() {
+    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+}
+
+log "[👉] Démarrage de l’installateur maître AubeZero"
+
+# === Dossiers AubeZero === #
+mkdir -p /etc/AubeZero
+mkdir -p /etc/AubeZero/Cerbere
+mkdir -p /etc/AubeZero/Apollon
+mkdir -p /etc/AubeZero/Hermes
+mkdir -p /etc/AubeZero/Agora
+mkdir -p /etc/AubeZero/Hades
+
+log "[+] Arborescence AubeZero créée"
+
+# === Dépendances globales === #
+install_dep() {
+    if command -v "$1" >/dev/null 2>&1; then
+        log "[=] Dépendance OK : $1"
+        return
+    fi
+
+    log "[~] Installation dépendance : $1"
+    apt-get update -qq
+    apt-get install -y -qq "$1"
+}
+
+install_dep "curl"
+install_dep "git"
+install_dep "jq"
+install_dep "docker.io"
+
+log "[+] Dépendances globales installées"
+
+# === Téléchargement du dépôt AubeZero === #
+AUBEZERO_GITHUB="https://github.com/ROYJohan08/AubeZero.git"
+AUBEZERO_LOCAL="/etc/AubeZero/AubeZeroRepo"
+
+if [[ ! -d "$AUBEZERO_LOCAL/.git" ]]; then
+    log "[~] Clonage du dépôt AubeZero"
+    git clone "$AUBEZERO_GITHUB" "$AUBEZERO_LOCAL" >/dev/null 2>&1 \
+        && log "[+] Dépôt cloné" \
+        || { log "[-] Échec clonage dépôt"; exit 1; }
+else
+    log "[~] Mise à jour du dépôt AubeZero"
+    git -C "$AUBEZERO_LOCAL" pull >/dev/null 2>&1 \
+        && log "[+] Dépôt mis à jour" \
+        || log "[−] Échec mise à jour dépôt"
+fi
+
+# === Installation des modules Cerbere === #
+install_module() {
+    local module="$1"
+    local script="/etc/AubeZero/AubeZeroRepo/Cerbere/${module}.sh"
+
+    if [[ -f "$script" ]]; then
+        log "[~] Installation module : $module"
+        bash "$script"
+        log "[+] Module installé : $module"
+    else
+        log "[-] Module introuvable : $module"
+    fi
+}
+
+MODULES=(
+    "cerbere-duress"
+    "cerbere-watchdog"
+    "cerbere-glancews"
+    "cerbere-portainer"
+    "cerbere-vaultwarden"
+    "cerbere-siyuan"
+    "cerbere-kolibri"
+    "cerbere-kiwix"
+    "cerbere-gitea"
+)
+
+for m in "${MODULES[@]}"; do
+    install_module "$m"
 done
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des .zim : SUCCESS" >> "$LOG_FILE"
 
-# === Téléchargement des installateurs standalone === #
+log "[✓] Tous les modules Cerbere installés"
 
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des standalone installers : PENDING" >> "$LOG_FILE"
-wget $WGET_FLAGS -O "$BASE_DIR/Firefox/Windows/Firefox_Setup_Win64.exe" "https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=fr"
-wget $WGET_FLAGS -O "$BASE_DIR/Firefox/Mac/Firefox.dmg" "https://download.mozilla.org/?product=firefox-latest-ssl&os=osx&lang=fr"
-wget $WGET_FLAGS -O "$BASE_DIR/Firefox/Linux/firefox.tar.bz2" "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=fr"
-wget $WGET_FLAGS -O "$BASE_DIR/Firefox/Android/Firefox.apk" "https://download.mozilla.org/?product=fennec-latest&os=android&lang=multi"
-wget $WGET_FLAGS -O "$BASE_DIR/Chrome/Windows/ChromeStandaloneSetup64.exe" "https://dl.google.com/chrome/install/standalone/current/chrome_installer.exe"
-wget $WGET_FLAGS -O "$BASE_DIR/Chrome/Mac/googlechrome.dmg" "https://dl.google.com/chrome/mac/stable/GGRO/googlechrome.dmg"
-wget $WGET_FLAGS -O "$BASE_DIR/Chrome/Linux/google-chrome-stable_current_amd64.deb" "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
-wget $WGET_FLAGS -O "$BASE_DIR/VLC/Windows/vlc-win64.exe" "https://get.videolan.org/vlc/last/win64/vlc-3.0.21-win64.exe"
-wget $WGET_FLAGS -O "$BASE_DIR/VLC/Mac/vlc.dmg" "https://get.videolan.org/vlc/last/macosx/vlc-3.0.21-intel64.dmg"
-wget $WGET_FLAGS -O "$BASE_DIR/VLC/Android/VLC-Android.apk" "https://get.videolan.org/vlc-android/3.5.4/VLC-Android-3.5.4-arm64-v8a.apk"
-wget $WGET_FLAGS -O "$BASE_DIR/Jellyfin/Android/jellyfin-android.apk" "https://github.com/jellyfin/jellyfin-android/releases/latest/download/jellyfin-android-v0.17.8-release.apk"
-wget $WGET_FLAGS -O "$BASE_DIR/HomeAssistant/Android/home-assistant-android.apk" "https://github.com/home-assistant/android/releases/latest/download/app-minimal-release.apk"
-wget $WGET_FLAGS -O "$BASE_DIR/Rufus/rufus.exe" "https://github.com/pbatard/rufus/releases/download/v4.6/rufus-4.6.exe"
-wget $WGET_FLAGS -O "$BASE_DIR/ImageGlass/ImageGlass_Installer.exe" "https://github.com/d2phap/ImageGlass/releases/download/v9.3.0.1019/ImageGlass_9.3.0.1019_x64.exe"
-wget $WGET_FLAGS -O "$BASE_DIR/PuTTY/putty-64bit-installer.msi" "https://the.earth.li/~sgtatham/putty/latest/w64/putty-64bit-installer.msi"
-wget $WGET_FLAGS -O "$BASE_DIR/FileZilla/FileZilla_Win64_setup.exe" --user-agent="$USER_AGENT" "https://download.filezilla-project.org/client/FileZilla_3.68.1_win64-setup.exe"
-wget $WGET_FLAGS -O "$BASE_DIR/NotepadPlusPlus/npp_setup.exe" "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.7.7/npp.8.7.7.Installer.x64.exe"
-wget $WGET_FLAGS -O "$BASE_DIR/AnyDesk/Windows/AnyDesk.exe" "https://download.anydesk.com/AnyDesk.exe"
-wget $WGET_FLAGS -O "$BASE_DIR/AnyDesk/Mac/AnyDesk.dmg" "https://download.anydesk.com/anydesk_mac.dmg"
-wget $WGET_FLAGS -O "$BASE_DIR/AnyDesk/Linux/anydesk_amd64.deb" "https://download.anydesk.com/linux/anydesk_6.3.0-1_amd64.deb"
-wget $WGET_FLAGS -O "$BASE_DIR/AnyDesk/Android/AnyDesk.apk" "https://download.anydesk.com/android/anydesk-release.apk"
-wget $WGET_FLAGS -O "$BASE_DIR/LibreOffice/Windows/LibreOffice_Win_x64.msi" "https://download.documentfoundation.org/libreoffice/stable/24.8.0/win/x86_64/LibreOffice_24.8.0_Win_x86-64.msi"
-wget $WGET_FLAGS -O "$BASE_DIR/LibreOffice/Mac/LibreOffice_Mac_x86_64.dmg" "https://download.documentfoundation.org/libreoffice/stable/24.8.0/mac/x86_64/LibreOffice_24.8.0_MacOS_x86-64.dmg"
-wget $WGET_FLAGS -O "$BASE_DIR/LibreOffice/Linux/LibreOffice_Linux_x86-64_deb.tar.gz" "https://download.documentfoundation.org/libreoffice/stable/24.8.0/deb/x86_64/LibreOffice_24.8.0_Linux_x86-64_deb.tar.gz"
-wget $WGET_FLAGS -O "$BASE_DIR/WinRAR/winrar-x64-fr.exe" "https://www.win-rar.com/fileadmin/winrar-versions/winrar/winrar-x64-701fr.exe"
-wget $WGET_FLAGS -O "$BASE_DIR/ISOs/Ubuntu/ubuntu-24.04-desktop-amd64.iso" "https://releases.ubuntu.com/24.04/ubuntu-24.04-desktop-amd64.iso"
-find "$BASE_DIR" -type f -size 0 -delete
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Téléchargement des standalone installers : SUCCESS" >> "$LOG_FILE"
+# === Installation des commandes globales === #
+install_cmd() {
+    local cmd="$1"
+    local script="/etc/AubeZero/AubeZeroRepo/Commands/${cmd}.sh"
 
+    if [[ -f "$script" ]]; then
+        cp "$script" "/usr/bin/${cmd}"
+        chmod +x "/usr/bin/${cmd}"
+        log "[+] Commande installée : $cmd"
+    else
+        log "[-] Commande introuvable : $cmd"
+    fi
+}
 
-# === Démarage du docker kiwix === #
+COMMANDS=(
+    "duress"
+    "watchdog"
+    "glances"
+    "portainer"
+    "vaultwarden"
+    "siyuan"
+    "kolibri"
+    "kiwix"
+    "gitea"
+)
 
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker kiwix : PENDING" >> "$LOG_FILE"
-sudo docker rm -f kiwix
-sudo docker pull ghcr.io/kiwix/kiwix-serve:latest
-sudo docker run -d \
-	--name kiwix \
-	--restart=unless-stopped \
-	-p "$PortKiwix:8080" \
-	-v "$PathDkKiwix:/data" \
-	ghcr.io/kiwix/kiwix-serve:latest \
-	/data/*.zim
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker kiwix : SUCCESS" >> "$LOG_FILE"
+for c in "${COMMANDS[@]}"; do
+    install_cmd "$c"
+done
 
-# === Démarage du docker gitea === #
+log "[✓] Commandes globales installées"
 
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker gitea : PENDING" >> "$LOG_FILE"
-sudo docker rm -f gitea
-sudo docker pull gitea/gitea:latest
-sudo docker run -d \
-	--name gitea \
-	--restart=unless-stopped \
-	-p "$PortGitea:3000" \
-	-p 2222:22 \
-	-v "$PathDkGitea:/data" \
-	-v /etc/timezone:/etc/timezone:ro \
-	-v /etc/localtime:/etc/localtime:ro \
-	gitea/gitea:latest
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker gitea : SUCCESS" >> "$LOG_FILE"
-
-# === Démarage du docker siyuan === #
-
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker siyuan : PENDING" >> "$LOG_FILE"
-sudo docker rm -f siyuan
-sudo docker pull b3log/siyuan:latest
-sudo docker run -d \
-	--name siyuan \
-	-v "$PathDkSi:/siyuan/workspace" \
-	-p "$PortSiyuan:6806" \
-	-e PUID="$USER_ID" \
-	-e PGID="$GROUP_ID" \
-	b3log/siyuan:latest \
-	serve \
-	--workspace=/siyuan/workspace \
-	--accessAuthCode="$HighPassword"
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker siyuan : SUCCESS" >> "$LOG_FILE"
-
-# === Démarage du docker kolibri === #
-
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker kolibri : PENDING" >> "$LOG_FILE"
-sudo docker rm -f kolibri
-sudo docker pull learningequality/kolibri:latest
-sudo docker run -d \
-	--name kolibri \
-	--restart=unless-stopped \
-	-p "$PortKolibri:8080" \
-	-v "$PathDkKolibri:/kolibri" \
-	learningequality/kolibri:latest
-echo "$(date +'%Y%m%d%H:%M')-${Programme}-Démarrage du docker kolibri : SUCCESS" >> "$LOG_FILE"
+# === Fin === #
+log "[✓] Installation complète AubeZero terminée"
+echo "[✓] Installation complète AubeZero terminée"
