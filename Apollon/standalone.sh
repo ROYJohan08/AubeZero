@@ -165,4 +165,83 @@ else
     fi
 fi
 
+# === Création de la commande standalone === #
+log "[~] Création de la commande standalone"
+
+STANDALONE_CMD="/usr/bin/standalone"
+
+cat > "$STANDALONE_CMD" << 'EOF'
+#!/bin/bash
+
+SCRIPT="/etc/AubeZero/Apollon/standalone.sh"
+JSON_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main/Apollon/standalone.json"
+TMP_JSON="/tmp/StandAlone.json"
+USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+log() {
+    LOG_DIR="/etc/AubeZero/Mnemosyne"
+    LOG_FILE="$LOG_DIR/$(date +%Y-%m).log"
+    mkdir -p "$LOG_DIR"
+    echo "$(date +'%Y%m%d%H%M')-Standalone-$1" >> "$LOG_FILE"
+}
+
+case "$1" in
+    start)
+        log "[~] Démarrage du module standalone"
+        if pgrep -f "$SCRIPT" >/dev/null 2>&1; then
+            log "[=] Module déjà en cours d'exécution"
+            echo "[=] Apollon-standalone déjà démarré."
+            exit 0
+        fi
+        bash "$SCRIPT" &
+        log "[+] Module démarré"
+        echo "[+] Apollon-standalone démarré."
+        ;;
+
+    stop)
+        log "[~] Arrêt du module standalone"
+        if ! pgrep -f "$SCRIPT" >/dev/null 2>&1; then
+            log "[=] Module déjà arrêté"
+            echo "[=] Apollon-standalone déjà arrêté."
+            exit 0
+        fi
+        pkill -f "$SCRIPT"
+        log "[+] Module arrêté"
+        echo "[+] Apollon-standalone arrêté."
+        ;;
+
+    restart)
+        log "[~] Redémarrage du module standalone"
+        pkill -f "$SCRIPT" >/dev/null 2>&1 || true
+        bash "$SCRIPT" &
+        log "[+] Module redémarré"
+        echo "[+] Apollon-standalone redémarré."
+        ;;
+
+    update)
+        log "[~] Mise à jour du module standalone"
+        if curl -sSL -f -A "$USER_AGENT" "$JSON_URL" -o "$TMP_JSON"; then
+            log "[+] JSON mis à jour"
+            echo "[+] Liste standalone mise à jour."
+        else
+            log "[−] Échec mise à jour JSON"
+            echo "[−] Impossible de mettre à jour la liste."
+            exit 1
+        fi
+        bash "$SCRIPT"
+        log "[+] Mise à jour complète"
+        echo "[+] Mise à jour complète effectuée."
+        ;;
+
+    *)
+        echo "[−] Action inconnue : $1"
+        echo "Usage : standalone {start|stop|restart|update}"
+        exit 1
+        ;;
+esac
+EOF
+
+chmod +x "$STANDALONE_CMD"
+log "[+] Commande standalone créée : $STANDALONE_CMD"
+
 log "[✓] Fin du programme"
