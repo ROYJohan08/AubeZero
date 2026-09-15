@@ -1,18 +1,45 @@
 #!/bin/bash
+# cerbere-watchdog.sh
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 15/09/2026 13:46
+# @Desc : Installation et configuration du watchdog Cerbere
+
+exec 1>/dev/null
 set -euo pipefail
 
 Programme="Cerbere-WatchDog"
-LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+# === Chargement des credentials === #
+CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
+DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+DEFAULT_CERBERE_PATH="/etc/AubeZero/Cerbere"
+
+if [[ -f "$CRED_FILE" ]]; then
+    set -a
+    source "$CRED_FILE"
+    set +a
+else
+    PATH_MNEMOSYNE=""
+    PATH_CERBERE="$DEFAULT_CERBERE_PATH"
+fi
+
+# === LOG SYSTEM === #
+if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
+    LOG_DIR="$PATH_MNEMOSYNE"
+else
+    LOG_DIR="$DEFAULT_LOG_DIR"
+fi
+
 LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
 
-# --- Fonction de logs ---
 log() {
     mkdir -p "$LOG_DIR" > /dev/null
     echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
 }
 
 # === Installation du Watchdog === #
-REPAIR_SCRIPT="/etc/AubeZero/Cerbere/network-repair.sh"
+REPAIR_SCRIPT="${PATH_CERBERE:-$DEFAULT_CERBERE_PATH}/network-repair.sh"
 
 # Fallback des variables
 MAX_LOAD="${MAX_LOAD:-24}"
@@ -59,9 +86,13 @@ exec 2>&1
 
 Programme="Cerbere-NetworkRepair"
 
+# === LOG SYSTEM === #
+LOG_DIR="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
+LOG_FILE="\${LOG_DIR}/\$(date +%Y-%m).log"
+
 log() {
-    mkdir -p "/etc/AubeZero/Mnemosyne/" > /dev/null
-    echo "\$(date +'%Y%m%d%H:%M')-\${Programme}-\$1" >> "/etc/AubeZero/Mnemosyne/\$(date +%Y-%m).log"
+    mkdir -p "\$LOG_DIR" > /dev/null
+    echo "\$(date +'%Y%m%d%H:%M')-\${Programme}-\$1" >> "\$LOG_FILE"
 }
 
 log "[WATCHDOG] Perte de connexion détectée. Redémarrage de systemd-networkd"
