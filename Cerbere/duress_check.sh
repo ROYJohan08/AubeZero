@@ -1,4 +1,10 @@
 #!/bin/bash
+# duress_check.sh
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 15/09/2026 13:39
+# @Desc : Vérification du code Duress et déclenchement du scénario Hades DDay
+
 set -euo pipefail
 
 # === Chargement des credentials === #
