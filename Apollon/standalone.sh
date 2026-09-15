@@ -2,7 +2,7 @@
 
 # === Vérification des droits administrateurs === #
 if [ "$EUID" -ne 0 ]; then
-    echo "Droits insuffisants. Veuillez exécuter ce script en tant que root." >&2
+    echo "[−] Droits insuffisants. Exécutez ce script en tant que root." >&2
     exit 1
 fi
 
@@ -21,104 +21,95 @@ log() {
     LOG_DIR="/etc/AubeZero/Mnemosyne"
     LOG_FILE="$LOG_DIR/$(date +%Y-%m).log"
     mkdir -p "$LOG_DIR"
-    echo "$(date +'%Y%m%d%H:%M')-${Programme}-$1" >> "$LOG_FILE"
+    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
 }
+
+log "[👉] Début"
 
 # === Vérification et installation des dépendances === #
 check_dep() {
     local dep="$1"
-    local start_time end_time duration
-    local pkg_manager="unknown"
+    local pkg_manager=""
 
-    if ! command -v "$dep" >/dev/null 2>&1; then
-        log "Dépendance manquante : $dep | Installation : PENDING"
+    if command -v "$dep" >/dev/null 2>&1; then
+        log "[=] Dépendance OK : $dep"
+        return
+    fi
 
-        # Détection du gestionnaire de paquets
-        if command -v apt-get >/dev/null 2>&1; then
-            pkg_manager="apt-get"
-        elif command -v dnf >/dev/null 2>&1; then
-            pkg_manager="dnf"
-        elif command -v yum >/dev/null 2>&1; then
-            pkg_manager="yum"
-        elif command -v pacman >/dev/null 2>&1; then
-            pkg_manager="pacman"
-        else
-            log "Installation impossible : gestionnaire de paquets non détecté"
-            echo "Impossible d’installer automatiquement $dep" >&2
-            exit 1
-        fi
+    log "[~] Dépendance manquante : $dep | Installation"
 
-        log "Gestionnaire détecté : $pkg_manager | Dépendance : $dep"
-
-        start_time=$(date +%s)
-
-        # Installation silencieuse selon le gestionnaire
-        case "$pkg_manager" in
-            apt-get)
-                DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1
-                DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$dep" >/dev/null 2>&1
-                ;;
-            dnf)
-                dnf install -y -q "$dep" >/dev/null 2>&1
-                ;;
-            yum)
-                yum install -y -q "$dep" >/dev/null 2>&1
-                ;;
-            pacman)
-                pacman -Sy --noconfirm --noprogressbar "$dep" >/dev/null 2>&1
-                ;;
-        esac
-
-        end_time=$(date +%s)
-        duration=$((end_time - start_time))
-
-        # Vérification post-installation
-        if command -v "$dep" >/dev/null 2>&1; then
-            log "Dépendance installée : $dep | SUCCESS | Durée=${duration}s | Gestionnaire=$pkg_manager"
-        else
-            log "Dépendance installée : $dep | FAIL | Durée=${duration}s | Gestionnaire=$pkg_manager"
-            echo "Échec installation de $dep" >&2
-            exit 1
-        fi
+    if command -v apt-get >/dev/null 2>&1; then
+        pkg_manager="apt-get"
+    elif command -v dnf >/dev/null 2>&1; then
+        pkg_manager="dnf"
+    elif command -v yum >/dev/null 2>&1; then
+        pkg_manager="yum"
+    elif command -v pacman >/dev/null 2>&1; then
+        pkg_manager="pacman"
     else
-        log "Dépendance OK : $dep | Déjà installée"
+        log "[−] Aucun gestionnaire de paquets détecté"
+        echo "Impossible d’installer automatiquement $dep" >&2
+        exit 1
+    fi
+
+    log "[~] Gestionnaire détecté : $pkg_manager"
+
+    case "$pkg_manager" in
+        apt-get)
+            DEBIAN_FRONTEND=noninteractive apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$dep"
+            ;;
+        dnf)
+            dnf install -y -q "$dep"
+            ;;
+        yum)
+            yum install -y -q "$dep"
+            ;;
+        pacman)
+            pacman -Sy --noconfirm --noprogressbar "$dep"
+            ;;
+    esac
+
+    if command -v "$dep" >/dev/null 2>&1; then
+        log "[+] Dépendance installée : $dep"
+    else
+        log "[−] Échec installation : $dep"
+        exit 1
     fi
 }
 
-# === Exécution de la vérification des dépendances === #
-log "Vérification des dépendances : START"
+log "[~] Vérification des dépendances"
 check_dep "curl"
 check_dep "jq"
-log "Vérification des dépendances : COMPLETE"
+log "[+] Dépendances OK"
 
 # === Téléchargement de la base JSON === #
 mkdir -p "$TARGET_DIR"
 
-log "Téléchargement de la liste : PENDING"
+log "[~] Téléchargement de la liste"
 if ! curl -sSL -f -A "$USER_AGENT" "$JSON_URL" -o "$TMP_JSON"; then
-    log "Téléchargement de la liste : FAIL"
+    log "[−] Téléchargement JSON : FAIL"
     exit 1
 fi
-log "Téléchargement de la liste : SUCCESS"
-
-log "Traitement de la liste : PENDING"
+log "[+] Téléchargement JSON : SUCCESS"
 
 # === Traitement des éléments === #
+log "[~] Traitement de la liste"
+
 IFS=$'\n'
 jq -c '.[]' "$TMP_JSON" | while read -r item; do
     nom=$(echo "$item" | jq -r '.Nom // empty')
     version=$(echo "$item" | jq -r '.Version // empty')
     url=$(echo "$item" | jq -r '.Url // empty')
 
-    if [ -z "$url" ] || [ "$url" == "null" ]; then
+    if [[ -z "$url" || "$url" == "null" ]]; then
+        log "[~] Élément ignoré (URL vide)"
         continue
     fi
 
-    # Extraire le nom du fichier
     filename=$(basename "$url" | cut -d'?' -f1)
 
-    # Fallback pour les URL dynamiques sans extension (ex: Firefox)
-    if [ -z "$filename" ] || [[ "$filename" == *"="* ]] || [[ "$filename" == *"?"* ]]; then
+    if [[ -z "$filename" || "$filename" == *"="* || "$filename" == *"?"* ]]; then
         case "$version" in
             "Windows") filename="${nom}_Setup.exe" ;;
             "Mac")     filename="${nom}.dmg" ;;
@@ -128,57 +119,50 @@ jq -c '.[]' "$TMP_JSON" | while read -r item; do
         esac
     fi
 
-    # Création du chemin cible
-    if [ -n "$nom" ] && [ -n "$version" ] && [ "$version" != "null" ]; then
+    if [[ -n "$nom" && -n "$version" && "$version" != "null" ]]; then
         dest_dir="$TARGET_DIR/$nom/$version"
-    elif [ -n "$nom" ]; then
-        dest_dir="$TARGET_DIR/$nom"
     else
-        dest_dir="$TARGET_DIR"
+        dest_dir="$TARGET_DIR/$nom"
     fi
 
     mkdir -p "$dest_dir"
     file_path="$dest_dir/$filename"
 
-    # Téléchargement conditionnel (curl -z évite de retélécharger si le fichier n'a pas changé)
+    log "[~] Téléchargement : $nom ($version)"
+
     if curl -sSL -A "$USER_AGENT" -L -z "$file_path" -o "$file_path" "$url"; then
-        if [ -f "$file_path" ]; then
-            log "--> Logiciel : [$nom] | Version : [$version] | Fichier : $file_path"
-        fi
+        log "[+] Logiciel : $nom | Version : $version | Fichier : $file_path"
     else
-        log "--> Échec téléchargement : [$nom] | Version : [$version] | URL : $url"
+        log "[−] Échec téléchargement : $nom | Version : $version"
     fi
 done
 
 rm -f "$TMP_JSON"
-log "Traitement de la liste : SUCCESS"
+log "[+] Traitement terminé"
+
 # === Ajout automatique de la tâche cron === #
 CRON_CMD="bash /etc/AubeZero/Apollon/standalone.sh"
 CRON_SCHEDULE="0 3 1-7 * 3"
 CRON_LINE="$CRON_SCHEDULE $CRON_CMD"
 
-log "Vérification de la tâche cron : START"
+log "[~] Vérification de la tâche cron"
 
-# Vérifie si la tâche existe déjà
 if crontab -l 2>/dev/null | grep -F "$CRON_CMD" >/dev/null 2>&1; then
-    log "Tâche cron déjà présente : OK | Commande=$CRON_CMD"
+    log "[=] Tâche cron déjà présente : $CRON_CMD"
 else
-    log "Tâche cron absente : AJOUT | Commande=$CRON_CMD"
+    log "[~] Ajout de la tâche cron"
 
-    # Ajout de la tâche cron
     (
         crontab -l 2>/dev/null
         echo "$CRON_LINE"
     ) | crontab -
 
-    # Vérification post-ajout
     if crontab -l 2>/dev/null | grep -F "$CRON_CMD" >/dev/null 2>&1; then
-        log "Tâche cron ajoutée : SUCCESS | Ligne=$CRON_LINE"
+        log "[+] Tâche cron ajoutée : $CRON_LINE"
     else
-        log "Tâche cron ajoutée : FAIL | Ligne=$CRON_LINE"
-        echo "Échec de l’ajout de la tâche cron." >&2
+        log "[−] Échec ajout tâche cron"
         exit 1
     fi
 fi
 
-log 
+log "[✓] Fin du programme"
