@@ -1,9 +1,33 @@
 #!/bin/bash
+# cerbere-glancews.sh
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 15/09/2026 13:41
+# @Desc : Installation, configuration et activation du service Glances pour AubeZero
+
 set -euo pipefail
+
+# === Chargement des credentials === #
+CREDENTIALS_FILE="/etc/AubeZero/Cerbere/Credentials.env"
+DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+if [[ -f "$CREDENTIALS_FILE" ]]; then
+    set -a
+    source "$CREDENTIALS_FILE"
+    set +a
+else
+    PATH_MNEMOSYNE=""
+fi
 
 # === LOG SYSTEM === #
 Programme="Cerbere-Glancews"
-LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
+    LOG_DIR="$PATH_MNEMOSYNE"
+else
+    LOG_DIR="$DEFAULT_LOG_DIR"
+fi
+
 LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
 
 log() {
