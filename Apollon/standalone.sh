@@ -11,7 +11,7 @@ set -euo pipefail
 
 # === Variables globales === #
 Programme="Apollon-standalone"
-JSON_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main/Apollon/StandAlone.json"
+JSON_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main/Apollon/standalone.json"
 TARGET_DIR="/media/Docs01/Logiciels/StandaloneInstaller"
 TMP_JSON="/tmp/StandAlone.json"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
