@@ -1,4 +1,9 @@
 #!/bin/bash
+# apollon-standalone.sh
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 15/09/2026 13:48
+# @Desc : Téléchargement, mise à jour et installation des logiciels standalone AubeZero
 
 # === Vérification des droits administrateurs === #
 if [ "$EUID" -ne 0 ]; then
@@ -6,25 +11,51 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# === Stop en cas d'erreurs globales === #
 set -euo pipefail
 
-# === Variables globales === #
 Programme="Apollon-standalone"
-JSON_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main/Apollon/standalone.json"
-TARGET_DIR="/media/Docs01/Logiciels/StandaloneInstaller"
-TMP_JSON="/tmp/StandAlone.json"
-USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-# === Fonction de Logging === #
+# === Chargement credentials === #
+CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
+DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+DEFAULT_DOCS01="/media/Docs01"
+DEFAULT_CERBERE="/etc/AubeZero/Cerbere"
+
+if [[ -f "$CRED_FILE" ]]; then
+    set -a
+    source "$CRED_FILE"
+    set +a
+else
+    PATH_MNEMOSYNE=""
+    PATH_DOCS01="$DEFAULT_DOCS01"
+    PATH_CERBERE="$DEFAULT_CERBERE"
+fi
+
+# === LOG SYSTEM === #
+if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
+    LOG_DIR="$PATH_MNEMOSYNE"
+else
+    LOG_DIR="$DEFAULT_LOG_DIR"
+fi
+
+LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+
 log() {
-    LOG_DIR="/etc/AubeZero/Mnemosyne"
-    LOG_FILE="$LOG_DIR/$(date +%Y-%m).log"
     mkdir -p "$LOG_DIR"
     echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
 }
 
 log "[👉] Début"
+
+# === Variables globales === #
+JSON_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main/Apollon/standalone.json"
+TARGET_DIR="${PATH_DOCS01}/Logiciels/StandaloneInstaller"
+TMP_JSON="/tmp/StandAlone.json"
+LOCAL_JSON="${PATH_CERBERE}/Apollon/standalone.json"
+USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+
+mkdir -p "$TARGET_DIR"
+mkdir -p "$(dirname "$LOCAL_JSON")"
 
 # === Vérification et installation des dépendances === #
 check_dep() {
@@ -38,44 +69,28 @@ check_dep() {
 
     log "[~] Dépendance manquante : $dep | Installation"
 
-    if command -v apt-get >/dev/null 2>&1; then
-        pkg_manager="apt-get"
-    elif command -v dnf >/dev/null 2>&1; then
-        pkg_manager="dnf"
-    elif command -v yum >/dev/null 2>&1; then
-        pkg_manager="yum"
-    elif command -v pacman >/dev/null 2>&1; then
-        pkg_manager="pacman"
+    if command -v apt-get >/dev/null 2>&1; then pkg_manager="apt-get"
+    elif command -v dnf >/dev/null 2>&1; then pkg_manager="dnf"
+    elif command -v yum >/dev/null 2>&1; then pkg_manager="yum"
+    elif command -v pacman >/dev/null 2>&1; then pkg_manager="pacman"
     else
         log "[−] Aucun gestionnaire de paquets détecté"
-        echo "Impossible d’installer automatiquement $dep" >&2
         exit 1
     fi
-
-    log "[~] Gestionnaire détecté : $pkg_manager"
 
     case "$pkg_manager" in
         apt-get)
             DEBIAN_FRONTEND=noninteractive apt-get update -qq
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$dep"
             ;;
-        dnf)
-            dnf install -y -q "$dep"
-            ;;
-        yum)
-            yum install -y -q "$dep"
-            ;;
-        pacman)
-            pacman -Sy --noconfirm --noprogressbar "$dep"
-            ;;
+        dnf) dnf install -y -q "$dep" ;;
+        yum) yum install -y -q "$dep" ;;
+        pacman) pacman -Sy --noconfirm --noprogressbar "$dep" ;;
     esac
 
-    if command -v "$dep" >/dev/null 2>&1; then
-        log "[+] Dépendance installée : $dep"
-    else
-        log "[−] Échec installation : $dep"
-        exit 1
-    fi
+    command -v "$dep" >/dev/null 2>&1 \
+        && log "[+] Dépendance installée : $dep" \
+        || { log "[−] Échec installation : $dep"; exit 1; }
 }
 
 log "[~] Vérification des dépendances"
@@ -83,15 +98,21 @@ check_dep "curl"
 check_dep "jq"
 log "[+] Dépendances OK"
 
-# === Téléchargement de la base JSON === #
-mkdir -p "$TARGET_DIR"
+# === Téléchargement JSON (avec fallback local) === #
+log "[~] Téléchargement de la liste standalone"
 
-log "[~] Téléchargement de la liste"
-if ! curl -sSL -f -A "$USER_AGENT" "$JSON_URL" -o "$TMP_JSON"; then
-    log "[−] Téléchargement JSON : FAIL"
-    exit 1
+if curl -sSL -f -A "$USER_AGENT" "$JSON_URL" -o "$TMP_JSON"; then
+    log "[+] Téléchargement JSON : SUCCESS"
+    cp "$TMP_JSON" "$LOCAL_JSON"
+    log "[+] Copie locale mise à jour : $LOCAL_JSON"
+else
+    log "[−] Téléchargement JSON : FAIL — utilisation du JSON local"
+    if [[ ! -f "$LOCAL_JSON" ]]; then
+        log "[−] Aucun JSON local disponible — arrêt"
+        exit 1
+    fi
+    cp "$LOCAL_JSON" "$TMP_JSON"
 fi
-log "[+] Téléchargement JSON : SUCCESS"
 
 # === Traitement des éléments === #
 log "[~] Traitement de la liste"
@@ -147,22 +168,14 @@ CRON_LINE="$CRON_SCHEDULE $CRON_CMD"
 
 log "[~] Vérification de la tâche cron"
 
-if crontab -l 2>/dev/null | grep -F "$CRON_CMD" >/dev/null 2>&1; then
-    log "[=] Tâche cron déjà présente : $CRON_CMD"
-else
-    log "[~] Ajout de la tâche cron"
-
+if ! crontab -l 2>/dev/null | grep -F "$CRON_CMD" >/dev/null 2>&1; then
     (
         crontab -l 2>/dev/null
         echo "$CRON_LINE"
     ) | crontab -
-
-    if crontab -l 2>/dev/null | grep -F "$CRON_CMD" >/dev/null 2>&1; then
-        log "[+] Tâche cron ajoutée : $CRON_LINE"
-    else
-        log "[−] Échec ajout tâche cron"
-        exit 1
-    fi
+    log "[+] Tâche cron ajoutée : $CRON_LINE"
+else
+    log "[=] Tâche cron déjà présente"
 fi
 
 # === Création de la commande standalone === #
@@ -172,18 +185,37 @@ STANDALONE_CMD="/usr/bin/standalone"
 
 cat > "$STANDALONE_CMD" << 'EOF'
 #!/bin/bash
+set -euo pipefail
 
-SCRIPT="/etc/AubeZero/Apollon/standalone.sh"
-JSON_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main/Apollon/standalone.json"
-TMP_JSON="/tmp/StandAlone.json"
-USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+Programme="Apollon-Standalone"
+
+# === Chargement credentials === #
+CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
+DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+if [[ -f "$CRED_FILE" ]]; then
+    set -a
+    source "$CRED_FILE"
+    set +a
+else
+    PATH_MNEMOSYNE=""
+fi
+
+# === LOG SYSTEM === #
+if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
+    LOG_DIR="$PATH_MNEMOSYNE"
+else
+    LOG_DIR="$DEFAULT_LOG_DIR"
+fi
+
+LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
 
 log() {
-    LOG_DIR="/etc/AubeZero/Mnemosyne"
-    LOG_FILE="$LOG_DIR/$(date +%Y-%m).log"
     mkdir -p "$LOG_DIR"
     echo "$(date +'%Y%m%d%H%M')-Standalone-$1" >> "$LOG_FILE"
 }
+
+SCRIPT="/etc/AubeZero/Apollon/standalone.sh"
 
 case "$1" in
     start)
@@ -200,12 +232,7 @@ case "$1" in
 
     stop)
         log "[~] Arrêt du module standalone"
-        if ! pgrep -f "$SCRIPT" >/dev/null 2>&1; then
-            log "[=] Module déjà arrêté"
-            echo "[=] Apollon-standalone déjà arrêté."
-            exit 0
-        fi
-        pkill -f "$SCRIPT"
+        pkill -f "$SCRIPT" >/dev/null 2>&1 || true
         log "[+] Module arrêté"
         echo "[+] Apollon-standalone arrêté."
         ;;
@@ -220,14 +247,6 @@ case "$1" in
 
     update)
         log "[~] Mise à jour du module standalone"
-        if curl -sSL -f -A "$USER_AGENT" "$JSON_URL" -o "$TMP_JSON"; then
-            log "[+] JSON mis à jour"
-            echo "[+] Liste standalone mise à jour."
-        else
-            log "[−] Échec mise à jour JSON"
-            echo "[−] Impossible de mettre à jour la liste."
-            exit 1
-        fi
         bash "$SCRIPT"
         log "[+] Mise à jour complète"
         echo "[+] Mise à jour complète effectuée."
