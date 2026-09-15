@@ -1,16 +1,21 @@
 #!/bin/bash
+# cerbere-duress.sh
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 15/09/2026 13:37
+# @Desc : Installation et configuration du système de Duress Code pour Cerbere
 
 exec 1>/dev/null
 set -euo pipefail
 
 # === LOG SYSTEM === #
 Programme="Cerbere-Duress"
-LOG_DIR="/etc/AubeZero/Mnemosyne"
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+LOG_DIR="$DEFAULT_LOG_DIR"
 
 log() {
     mkdir -p "$LOG_DIR" > /dev/null
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "${LOG_DIR}/$(date +%Y-%m).log"
 }
 
 log "[👉] Début du programme"
@@ -33,6 +38,15 @@ if [[ -f "$CRED_FILE" ]]; then
 else
     log "[-] credentials.env introuvable : arrêt"
     exit 1
+fi
+
+# === Mise à jour du LOG_DIR depuis credentials.env === #
+if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
+    LOG_DIR="$PATH_MNEMOSYNE"
+    log "[+] LOG_DIR défini depuis credentials.env : $LOG_DIR"
+else
+    LOG_DIR="$DEFAULT_LOG_DIR"
+    log "[~] PATH_MNEMOSYNE absent : fallback vers $LOG_DIR"
 fi
 
 # === Récupération du code duress === #
@@ -70,14 +84,13 @@ else
     exit 1
 fi
 
-# Si le script local n'existe pas → installer directement
+# Installation ou mise à jour
 if [[ ! -f "$DURESS_SCRIPT" ]]; then
     cp "$TMP_GITHUB" "$DURESS_SCRIPT"
     chown root:root "$DURESS_SCRIPT"
     chmod 700 "$DURESS_SCRIPT"
     log "[+] duress_check.sh installé (nouveau)"
 else
-    # Comparaison des versions
     LOCAL_HASH=$(sha256sum "$DURESS_SCRIPT" | awk '{print $1}')
     REMOTE_HASH=$(sha256sum "$TMP_GITHUB" | awk '{print $1}')
 
