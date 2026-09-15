@@ -1,8 +1,33 @@
 #!/bin/bash
+# cerbere-portainer.sh
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 15/09/2026 13:42
+# @Desc : Installation de la commande Portainer pour AubeZero + gestion du conteneur
+
 set -euo pipefail
 
+# === Chargement des credentials === #
+CREDENTIALS_FILE="/etc/AubeZero/Cerbere/Credentials.env"
+DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+if [[ -f "$CREDENTIALS_FILE" ]]; then
+    set -a
+    source "$CREDENTIALS_FILE"
+    set +a
+else
+    PATH_MNEMOSYNE=""
+fi
+
+# === LOG SYSTEM === #
 Programme="Cerbere-Portainer"
-LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
+    LOG_DIR="$PATH_MNEMOSYNE"
+else
+    LOG_DIR="$DEFAULT_LOG_DIR"
+fi
+
 LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
 
 log() {
@@ -10,7 +35,50 @@ log() {
     echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
 }
 
+log "[👉] Installation de la commande Portainer"
+
 # === Variables par défaut === #
+PORTAINER_PORT="${PORT_PORTAINER:-1005}"
+PORTAINER_CONFIG="${PATH_PORTAINER_CONFIG:-/media/Runable/Docker/Portainer}"
+
+# === Création de la commande /usr/local/bin/portainer === #
+COMMAND_PATH="/usr/local/bin/portainer"
+
+log "[~] Génération de la commande Portainer"
+
+cat << 'EOF' > "$COMMAND_PATH"
+#!/bin/bash
+set -euo pipefail
+
+Programme="Cerbere-Portainer"
+
+# === Chargement des credentials === #
+CREDENTIALS_FILE="/etc/AubeZero/Cerbere/Credentials.env"
+DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+if [[ -f "$CREDENTIALS_FILE" ]]; then
+    set -a
+    source "$CREDENTIALS_FILE"
+    set +a
+else
+    PATH_MNEMOSYNE=""
+fi
+
+# === LOG SYSTEM === #
+if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
+    LOG_DIR="$PATH_MNEMOSYNE"
+else
+    LOG_DIR="$DEFAULT_LOG_DIR"
+fi
+
+LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+
+log() {
+    mkdir -p "$LOG_DIR" > /dev/null
+    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+}
+
+# === Variables === #
 PORTAINER_PORT="${PORT_PORTAINER:-1005}"
 PORTAINER_CONFIG="${PATH_PORTAINER_CONFIG:-/media/Runable/Docker/Portainer}"
 
@@ -46,15 +114,12 @@ update_portainer() {
     check_docker
     log "[~] Mise à jour Portainer..."
 
-    # Télécharger la nouvelle image
     docker pull portainer/portainer-ce:latest >/dev/null 2>&1 \
         || { log "[-] Impossible de télécharger la nouvelle image"; exit 1; }
 
-    # Supprimer l'ancien conteneur
     docker rm -f portainer >/dev/null 2>&1 || true
     log "[~] Ancien conteneur supprimé"
 
-    # Re-créer Portainer avec les paramètres AubeZero
     docker run -d \
         --name portainer \
         --privileged \
@@ -93,3 +158,9 @@ case "${1:-none}" in
         exit 1
         ;;
 esac
+EOF
+
+chmod +x "$COMMAND_PATH"
+log "[+] Commande Portainer installée : /usr/local/bin/portainer"
+
+log "[✓] Installation Cerbere-Portainer terminée"
