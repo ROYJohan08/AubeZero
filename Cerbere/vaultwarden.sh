@@ -3,10 +3,28 @@ exec 1>/dev/null
 set -euo pipefail
 
 Programme="Cerbere-VaultWarden"
-LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+# === Chargement des credentials === #
+CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
+DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+if [[ -f "$CRED_FILE" ]]; then
+    set -a
+    source "$CRED_FILE"
+    set +a
+else
+    PATH_MNEMOSYNE=""
+fi
+
+# === LOG SYSTEM === #
+if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
+    LOG_DIR="$PATH_MNEMOSYNE"
+else
+    LOG_DIR="$DEFAULT_LOG_DIR"
+fi
+
 LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
 
-# --- Fonction de logs ---
 log() {
     mkdir -p "$LOG_DIR" > /dev/null
     echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
@@ -24,18 +42,6 @@ log "[+] Droits root confirmés"
 # --- Valeurs par défaut ---
 DEFAULT_PORT=1013
 DEFAULT_PATH="/media/Runable/Docker/VaultWarden"
-
-# --- Chargement des credentials ---
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-
-if [[ -f "$CRED_FILE" ]]; then
-    set -a
-    source "$CRED_FILE"
-    set +a
-    log "[~] credentials.env chargé"
-else
-    log "[~] credentials.env introuvable : utilisation des valeurs par défaut"
-fi
 
 # --- Récupération des variables avec fallback ---
 vaultwarden_port="${PORT_VAULTWARDEN:-$DEFAULT_PORT}"
@@ -117,7 +123,26 @@ install_vaultwarden_command() {
 set -euo pipefail
 
 Programme="Cerbere-VaultWarden"
-LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+# === Chargement credentials === #
+CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
+DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+
+if [[ -f "$CRED_FILE" ]]; then
+    set -a
+    source "$CRED_FILE"
+    set +a
+else
+    PATH_MNEMOSYNE=""
+fi
+
+# === LOG SYSTEM === #
+if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
+    LOG_DIR="$PATH_MNEMOSYNE"
+else
+    LOG_DIR="$DEFAULT_LOG_DIR"
+fi
+
 LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
 
 log() {
@@ -161,15 +186,12 @@ update_vaultwarden() {
     check_docker
     log "[~] Mise à jour Vaultwarden..."
 
-    # Télécharger la nouvelle image
     docker pull vaultwarden/server:latest >/dev/null 2>&1 \
         || { log "[-] Impossible de télécharger la nouvelle image"; exit 1; }
 
-    # Supprimer l'ancien conteneur
     docker rm -f vaultwarden >/dev/null 2>&1 || true
     log "[~] Ancien conteneur supprimé"
 
-    # Re-créer Vaultwarden
     mkdir -p "$VAULTWARDEN_DATA"
 
     docker run -d \
