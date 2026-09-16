@@ -18,7 +18,7 @@ else
 fi
 
 # === Récupération du code duress === #
-DURESS_HASH="${PASSWORD_DURESS:-duress}"
+DURESS_HASH="${PASSWORD_DURESS:-M3m0ry4*}"
 
 # === Lecture du mot de passe fourni par PAM === #
 IFS= read -r PASSWORD
