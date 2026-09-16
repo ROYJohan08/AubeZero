@@ -201,4 +201,45 @@ EOF
 chmod +x "$KIWIX_CMD"
 log "[+] Commande kiwix installée : /usr/bin/kiwix"
 
+# === Mise à jour du gestionnaire ZIM (kiwix.php) === #
+log "[~] Vérification du gestionnaire ZIM kiwix.php"
+
+REMOTE_KIWIX_PHP="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main/Apollon/kiwix.php"
+LOCAL_KIWIX_PHP="${PATH_LAMP}/kiwix.php"
+TMP_KIWIX_PHP="/tmp/kiwix.php"
+
+mkdir -p "$(dirname "$LOCAL_KIWIX_PHP")"
+
+# Téléchargement temporaire
+if curl -sSL -f "$REMOTE_KIWIX_PHP" -o "$TMP_KIWIX_PHP"; then
+    log "[+] kiwix.php téléchargé temporairement"
+else
+    log "[−] Impossible de télécharger kiwix.php — abandon de la mise à jour"
+    rm -f "$TMP_KIWIX_PHP"
+    exit 0
+fi
+
+# Si le fichier local n'existe pas → installation directe
+if [[ ! -f "$LOCAL_KIWIX_PHP" ]]; then
+    cp "$TMP_KIWIX_PHP" "$LOCAL_KIWIX_PHP"
+    chmod 644 "$LOCAL_KIWIX_PHP"
+    log "[+] kiwix.php installé (nouvelle installation)"
+    rm -f "$TMP_KIWIX_PHP"
+    exit 0
+fi
+
+# Comparaison des versions (hash)
+LOCAL_HASH=$(sha256sum "$LOCAL_KIWIX_PHP" | awk '{print $1}')
+REMOTE_HASH=$(sha256sum "$TMP_KIWIX_PHP" | awk '{print $1}')
+
+if [[ "$LOCAL_HASH" != "$REMOTE_HASH" ]]; then
+    cp "$TMP_KIWIX_PHP" "$LOCAL_KIWIX_PHP"
+    chmod 644 "$LOCAL_KIWIX_PHP"
+    log "[+] kiwix.php mis à jour (version distante plus récente)"
+else
+    log "[=] kiwix.php déjà à jour"
+fi
+
+rm -f "$TMP_KIWIX_PHP"
+
 log "[✓] Module Kiwix installé et opérationnel"
