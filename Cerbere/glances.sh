@@ -64,14 +64,11 @@ if ! command -v python3 &>/dev/null || ! command -v pip3 &>/dev/null; then
         exit 1
     fi
 fi
-
 if ! command -v python3 &>/dev/null || ! command -v pip3 &>/dev/null; then
     log "[-] Échec de l'installation de Python3/pip3"
     exit 1
 fi
-
 log "[+] Python3/pip3 disponibles"
-
 # === Installation de Glances === #
 if command -v glances &>/dev/null; then
     log "[=] Glances déjà installé"
@@ -84,18 +81,15 @@ else
         log "[-] Échec de l'installation de Glances"
         exit 1
     fi
-
     log "[+] Glances installé"
 fi
 
 # === Configuration === #
 mkdir -p /etc/glances >/dev/null
-
 if [[ -f "$CONFIG_FILE" ]]; then
     log "[=] Configuration Glances déjà existante"
 else
     log "[~] Génération du fichier de configuration"
-
     cat << EOF > "$CONFIG_FILE"
 [global]
 bind_address = 0.0.0.0
@@ -125,7 +119,6 @@ if [[ -f "$SERVICE_FILE" ]]; then
     log "[=] Service systemd déjà présent"
 else
     log "[~] Création du service systemd"
-
     cat << EOF > "$SERVICE_FILE"
 [Unit]
 Description=Glances Monitoring Tool
@@ -142,10 +135,8 @@ EOF
 
     systemctl daemon-reload
     systemctl enable glances >/dev/null
-
     log "[+] Service systemd installé"
 fi
-
 # === Vérification / lancement du service === #
 if systemctl is-active --quiet glances; then
     log "[=] Glances déjà actif"
