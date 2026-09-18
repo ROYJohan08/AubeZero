@@ -1,35 +1,100 @@
 {
-    "BRENAN": {
-        "nom": "Protocole BRENAN (Extraction Prioritaire)",
+    "DURESS": {
+        "nom": "Protocole DURESS (Accès Sous Contrainte)",
         "couleur": "#dc3545",
-        "description": "### MENACE IMMÉDIATE : TRAQUE ACTIVE\n\n- **Situation :** Groupe hostile à vos trousses.\n- **Consignes :** Évacuez immédiatement et rejoignez les points d'extraction successifs dans l'ordre.",
+        "description": "### ACCÈS SOUS CONTRAINTE DÉTECTÉ\n\n- **Situation :** Un membre de la famille est pris en otage. Suppression des données compromises initiée.\n- **Consignes :** Veuillez vous rendre immédiatement au point d'extraction via les coordonnées ci-dessous.",
         "points": [
             {
-                "nom": "Point d'évacuation 1",
-                "lat": "",
-                "lng": ""
+                "nom": "Point d'extraction 1",
+                "lat": "LAT_CHIFFREE_VIA_P2",
+                "lng": "LNG_CHIFFREE_VIA_P2"
             },
             {
-                "nom": "Point d'évacuation 2",
-                "lat": "",
-                "lng": ""
+                "nom": "Point d'extraction 2",
+                "lat": "LAT_CHIFFREE_VIA_P2",
+                "lng": "LNG_CHIFFREE_VIA_P2"
             }
         ]
     },
     "ADAIR": {
         "nom": "Protocole ADAIR (Alerte Incendie)",
         "couleur": "#fd7e14",
-        "description": "### ALERTE INCENDIE : ÉVACUATION IMMÉDIATE\n\nRejoignez le point de ralliement.",
+        "description": "### INCENDIE DÉCLARÉ\n\n- **Situation :** Incendie déclaré dans ou à proximité de la BAD.\n- **Consignes :** Prenez vos affaires. Évacuez rapidement. Utilisez tous les moyens à votre disposition pour maîtriser l'incendie. Rendez-vous au point d'extraction 1 et, si besoin, au point 2.",
         "points": [
             {
                 "nom": "Point d'évacuation 1",
-                "lat": "",
-                "lng": ""
+                "lat": "LAT_CHIFFREE_VIA_P2",
+                "lng": "LNG_CHIFFREE_VIA_P2"
             },
             {
                 "nom": "Point d'évacuation 2",
-                "lat": "",
-                "lng": ""
+                "lat": "LAT_CHIFFREE_VIA_P2",
+                "lng": "LNG_CHIFFREE_VIA_P2"
+            }
+        ]
+    },
+    "BRENAN": {
+        "nom": "Protocole BRENAN (Fuite & Extraction)",
+        "couleur": "#bd2130",
+        "description": "### MENACE MILITAIRE / PARAMILITAIRE\n\n- **Situation :** Un groupe hostile vous recherche activement. Vous devez fuir.\n- **Consignes :**\n  - Prenez la fuite, la loi devient secondaire sur votre itinéraire d'extraction.\n  - Rejoignez le point d'extraction en suivant les coordonnées.\n  - Débarrassez-vous de tous les objets traçables.\n  - Retirez un maximum de cash avant votre départ.\n  - **Déplacez-vous tous les 3 jours.**",
+        "points": [
+            {
+                "nom": "Point d'extraction principal",
+                "lat": "LAT_CHIFFREE_VIA_P2",
+                "lng": "LNG_CHIFFREE_VIA_P2"
+            }
+        ]
+    },
+    "DALEK": {
+        "nom": "Protocole DALEK (Menace Imminente)",
+        "couleur": "#820000",
+        "description": "### DANGER INCONNU ET IMMÉDIAT\n\n- **Consignes :**\n  - Rendez-vous immédiatement à la BAD.\n  - Ne respectez aucune autorité.\n  - **Tirs létaux autorisés :** Éliminez toute menace.",
+        "points": [
+            {
+                "nom": "Point de ralliement BAD",
+                "lat": "LAT_CHIFFREE_VIA_P2",
+                "lng": "LNG_CHIFFREE_VIA_P2"
+            }
+        ]
+    },
+    "HALSEY": {
+        "nom": "Protocole HALSEY (Rupture Institutionnelle)",
+        "couleur": "#6f42c1",
+        "description": "### GOUVERNEMENT COMPROMIS\n\n- **Situation :** Le gouvernement en place doit être considéré comme déchu.\n- **Consignes :**\n  - Rendez-vous au plus vite à la BAD.\n  - Ne respectez aucune autorité.\n  - Tirs létaux autorisés après sommations.\n  - Si besoin, rendez-vous au point d'extraction secondaire.",
+        "points": [
+            {
+                "nom": "Point 1 - Ralliement BAD",
+                "lat": "LAT_CHIFFREE_VIA_P2",
+                "lng": "LNG_CHIFFREE_VIA_P2"
+            },
+            {
+                "nom": "Point 2 - Extraction secondaire",
+                "lat": "LAT_CHIFFREE_VIA_P2",
+                "lng": "LNG_CHIFFREE_VIA_P2"
+            }
+        ]
+    },
+    "KIES": {
+        "nom": "Protocole KIES (Périmètre Compromis)",
+        "couleur": "#e83e8c",
+        "description": "### COMPROMISSION FAMILIALE\n\n- **Situation :** Un membre de la famille est compromis.\n- **Consignes :**\n  - Coupez immédiatement toutes les communications.\n  - Débarrassez-vous de tous vos appareils traçables.\n  - Ne communiquez avec personne et déplacez-vous de manière aléatoire.\n  - **Une fois le protocole confirmé, basculez sur le protocole BRENAN.**",
+        "points": [
+            {
+                "nom": "Point de transition",
+                "lat": "LAT_CHIFFREE_VIA_P2",
+                "lng": "LNG_CHIFFREE_VIA_P2"
+            }
+        ]
+    },
+    "OPPENHEIMER": {
+        "nom": "Protocole OPPENHEIMER (Alerte NRBC)",
+        "couleur": "#20c997",
+        "description": "### DANGER N.R.B.C.\n\n- **Situation :** Danger Nucléaire, Radiologique, Biologique ou Chimique.\n- **Consignes :**\n  - Prenez des vivres, l'eau et les sacs d'évacuation.\n  - Rendez-vous immédiatement au bunker.",
+        "points": [
+            {
+                "nom": "Bunker - Accès principal",
+                "lat": "LAT_CHIFFREE_VIA_P2",
+                "lng": "LNG_CHIFFREE_VIA_P2"
             }
         ]
     }
