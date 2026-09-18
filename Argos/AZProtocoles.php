@@ -24,7 +24,7 @@ function parseMarkdown($text, &$debugLogs) {
     return nl2br($text);
 }
 
-// --- CHARGEMENT DES FICHIERS (LECTURE SEULE STRICTE) ---
+// --- CHARGEMENT DES FICHIERS ---
 function getStates($filePath, &$debugLogs) {$debugLogs[] = "Vérification du fichier d'état : " . $filePath;
     if (!file_exists($filePath)) {$debugLogs[] = "-> ERREUR : Le fichier d'état n'existe pas.";
         return [];
@@ -43,7 +43,7 @@ function getStates($filePath, &$debugLogs) {$debugLogs[] = "Vérification du fic
     return $data ?? [];
 }
 
-function getProtocolesData($filePath, &$debugLogs) {$debugLogs[] = "Lecture seule du fichier protocoles_data.json : " . $filePath;
+function getProtocolesData($filePath, &$debugLogs) {$debugLogs[] = "Lecture du fichier protocoles_data.json : " . $filePath;
 
     if (!file_exists($filePath) || filesize($filePath) === 0) {$debugLogs[] = "-> ERREUR : Le fichier protocoles_data.json est introuvable ou vide.";
         return [];
@@ -63,11 +63,10 @@ function getProtocolesData($filePath, &$debugLogs) {$debugLogs[] = "Lecture seul
 $states = getStates($stateFilePath,$debugLogs);
 $allProtocoles = getProtocolesData($protocolesDataFile, $debugLogs);$activeProtocoles = [];
 
-// Filtrage des protocoles actifs selon scenarios_state.json
+// Filtrage des protocoles actifs
 if (empty($states)) {$debugLogs[] = "-> \$states est vide. Activation de tous les protocoles.";
     foreach ($allProtocoles as$key => $proto) {$proto['description_html'] = parseMarkdown($proto['description'] ?? '',$debugLogs);
         
-        // Log des coordonnées brutes
         if (!empty($proto['points'])) {
             foreach ($proto['points'] as$idx => $pt) {$debugLogs[] = "GPS Brut [{$key}] Pt " . ($idx + 1) . " -> Lat: " . ($pt['lat'] ?? 'N/A') . " \vert{} Lng: " . ($pt['lng'] ?? 'N/A');
             }
@@ -89,7 +88,6 @@ if (empty($states)) {$debugLogs[] = "-> \$states est vide. Activation de tous le
 
         if ($isMatch) {$proto['description_html'] = parseMarkdown($proto['description'] ?? '',$debugLogs);
             
-            // Log des coordonnées brutes
             if (!empty($proto['points'])) {
                 foreach ($proto['points'] as$idx => $pt) {$debugLogs[] = "GPS Brut [{$key}] Pt " . ($idx + 1) . " -> Lat: " . ($pt['lat'] ?? 'N/A') . " \vert{} Lng: " . ($pt['lng'] ?? 'N/A');
                 }
@@ -100,7 +98,7 @@ if (empty($states)) {$debugLogs[] = "-> \$states est vide. Activation de tous le
     }
 }
 
-$debugLogs[] = "Nombre de protocoles actifs retenus : " . count($activeProtocoles);
+$debugLogs[] = "Nombre de protocoles actifs : " . count($activeProtocoles);
 
 // Export API JSON
 if (isset($_GET['format']) &&$_GET['format'] === 'json') {
@@ -215,7 +213,7 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
                     <div id="clientDebugLog">Attente d'une saisie de clé...</div>
                 </div>
 
-                <button id="btnCheckGps" class="btn-check" style="display:none;" onclick="checkUserLocation()">Vérifier ma position (Rayon 1 km)</button>
+                <button id="btnCheckGps" class="btn-check" style="display:none;" onclick="checkUserLocation()">Démarrer le suivi GPS en temps réel</button>
                 <div id="mapsLinkBox" style="margin-top: 15px;"></div>
             </div>
         </div>
@@ -226,15 +224,18 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
         let currentProtoCode = null;
         let currentPointIndex = 0;
         let decryptedCoords = null;
+        let geoWatchId = null;
 
         function logClientDebug(message, clear = false) {
             const container = document.getElementById('clientDebugLog');
-            if (clear) {
+            if (clear && container) {
                 container.innerHTML = '';
             }
-            const time = new Date().toLocaleTimeString();
-            container.innerHTML += `<div>[${time}] ${message}</div>`;
-            container.scrollTop = container.scrollHeight;
+            if (container) {
+                const time = new Date().toLocaleTimeString();
+                container.innerHTML += `<div>[${time}] ${message}</div>`;
+                container.scrollTop = container.scrollHeight;
+            }
         }
 
         function openProtocolModal(code) {
@@ -251,11 +252,14 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
 
             document.getElementById('clientPassword').value = '';
             logClientDebug("Modal ouverte pour : " + code, true);
+            
+            stopGeoTracking();
             updateGpsUI();
             document.getElementById('protocolModal').classList.add('active');
         }
 
         function closeProtocolModal() {
+            stopGeoTracking();
             document.getElementById('protocolModal').classList.remove('active');
         }
 
@@ -266,10 +270,10 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
             }
         }
 
-        // Déchiffrement AES-CBC dans le navigateur via Web Crypto API
+        // Déchiffrement AES-256-CBC via WebCrypto API
         async function decryptAESCBC(encryptedBase64, password, coordName) {
             try {
-                logClientDebug(`Tentative déchiffrement (${coordName}) : "${encryptedBase64.substring(0, 15)}..."`);
+                logClientDebug(`Déchiffrement (${coordName}) : "${encryptedBase64.substring(0, 15)}..."`);
                 const rawData = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
                 
                 if (rawData.length < 17) {
@@ -291,39 +295,39 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
                 );
 
                 const resultStr = new TextDecoder().decode(decrypted);
-                logClientDebug(`&rarr; [SUCCÈS ${coordName}] Valeur déchiffrée : ${resultStr}`);
+                logClientDebug(`&rarr; [SUCCÈS ${coordName}] Valeur : ${resultStr}`);
                 return resultStr;
             } catch (e) {
-                logClientDebug(`&rarr; [ÉCHEC ${coordName}] Erreur WebCrypto : ${e.message}`);
+                logClientDebug(`&rarr; [ÉCHEC ${coordName}] WebCrypto : ${e.message}`);
                 return null;
             }
         }
 
         async function updateGpsUI() {
-            logClientDebug("--- Lancement du processus de déchiffrement ---", true);
+            logClientDebug("--- Mise à jour du point GPS ---", true);
             const proto = protocolesData[currentProtoCode];
             const points = proto.points || [];
             const password = document.getElementById('clientPassword').value;
 
             if (points.length === 0) {
-                logClientDebug("Aucun point GPS dans ce protocole.");
-                document.getElementById('gpsStepInfo').innerText = "Aucune coordonnée GPS enregistrée pour ce protocole.";
+                logClientDebug("Aucun point GPS enregistré.");
+                document.getElementById('gpsStepInfo').innerText = "Aucune coordonnée GPS pour ce protocole.";
                 document.getElementById('btnCheckGps').style.display = 'none';
                 document.getElementById('mapsLinkBox').innerHTML = '';
+                stopGeoTracking();
                 return;
             }
 
             const targetPoint = points[currentPointIndex];
-            logClientDebug(`Point ${currentPointIndex + 1}/${points.length} sélectionné.`);
-            logClientDebug(`LAT Brute: ${targetPoint.lat}`);
-            logClientDebug(`LNG Brute: ${targetPoint.lng}`);
+            logClientDebug(`Traitement du point ${currentPointIndex + 1}/${points.length}`);
 
             if (!password) {
-                logClientDebug("Mot de passe vide. Déchiffrement en attente.");
-                document.getElementById('gpsStepInfo').innerText = "Saisissez la clé client pour déchiffrer les étapes GPS.";
+                logClientDebug("Attente de la clé client...");
+                document.getElementById('gpsStepInfo').innerText = "Saisissez votre clé client pour déchiffrer l'étape.";
                 document.getElementById('gpsStatus').innerText = "";
                 document.getElementById('btnCheckGps').style.display = 'none';
                 document.getElementById('mapsLinkBox').innerHTML = '';
+                stopGeoTracking();
                 return;
             }
 
@@ -338,27 +342,29 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
             }
 
             if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
-                logClientDebug("Résultat final : ÉCHEC DU DÉCHIFFREMENT.");
+                logClientDebug("Échec de déchiffrement du point courant.");
                 document.getElementById('gpsStepInfo').innerText = "Mot de passe incorrect ou données corrompues.";
                 document.getElementById('gpsStatus').innerText = "";
                 document.getElementById('btnCheckGps').style.display = 'none';
                 document.getElementById('mapsLinkBox').innerHTML = '';
+                stopGeoTracking();
                 return;
             }
 
             decryptedCoords = { lat: parseFloat(lat), lng: parseFloat(lng) };
-            logClientDebug(`Résultat final : VALIDE (${decryptedCoords.lat}, ${decryptedCoords.lng})`);
+            logClientDebug(`Point courant déchiffré : (${decryptedCoords.lat}, ${decryptedCoords.lng})`);
 
             document.getElementById('btnCheckGps').style.display = 'block';
+            document.getElementById('btnCheckGps').innerText = "Démarrer le suivi GPS en temps réel";
             document.getElementById('gpsStepInfo').innerHTML = `
-                <strong>Étape ${currentPointIndex + 1} / ${points.length} :</strong> ${targetPoint.nom || 'Point ' + (currentPointIndex + 1)}<br>
-                <strong>Coordonnées :</strong> ${decryptedCoords.lat}, ${decryptedCoords.lng}
+                <strong>Point ${currentPointIndex + 1} / ${points.length} :</strong> ${targetPoint.nom || 'Point ' + (currentPointIndex + 1)}<br>
+                <strong>Cible :</strong> ${decryptedCoords.lat}, ${decryptedCoords.lng}
             `;
-            document.getElementById('gpsStatus').innerText = "Clé validée. Prêt pour la vérification GPS.";
+            document.getElementById('gpsStatus').innerText = "Clé valide. Appuyez sur le bouton pour lancer le suivi de position.";
             document.getElementById('gpsStatus').style.color = "#28a745";
             
             document.getElementById('mapsLinkBox').innerHTML = `
-                <a href="https://maps.google.com/?q=${decryptedCoords.lat},${decryptedCoords.lng}" target="_blank" style="color:#17a2b8;">Voir ce point sur Google Maps</a>
+                <a href="https://maps.google.com/?q=${decryptedCoords.lat},${decryptedCoords.lng}" target="_blank" style="color:#17a2b8;">Ouvrir l'étape dans Google Maps</a>
             `;
         }
 
@@ -372,42 +378,77 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
             return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
         }
 
+        function stopGeoTracking() {
+            if (geoWatchId !== null) {
+                navigator.geolocation.clearWatch(geoWatchId);
+                geoWatchId = null;
+                logClientDebug("Suivi GPS arrêté.");
+            }
+        }
+
         function checkUserLocation() {
             const statusBox = document.getElementById('gpsStatus');
-            statusBox.innerText = "Géolocalisation en cours...";
-            statusBox.style.color = "#17a2b8";
+            const proto = protocolesData[currentProtoCode];
 
             if (!navigator.geolocation) {
-                statusBox.innerText = "La géolocalisation n'est pas supportée par votre navigateur.";
+                statusBox.innerText = "La géolocalisation n'est pas supportée par votre appareil.";
                 statusBox.style.color = "#dc3545";
                 return;
             }
 
-            navigator.geolocation.getCurrentPosition((position) => {
-                const distance = calculateDistanceInKm(
-                    position.coords.latitude, position.coords.longitude,
-                    decryptedCoords.lat, decryptedCoords.lng
-                );
+            if (geoWatchId !== null) {
+                stopGeoTracking();
+                statusBox.innerText = "Suivi GPS en pause.";
+                document.getElementById('btnCheckGps').innerText = "Démarrer le suivi GPS en temps réel";
+                return;
+            }
 
-                if (distance <= 1.0) {
-                    const proto = protocolesData[currentProtoCode];
-                    if (currentPointIndex + 1 < proto.points.length) {
-                        currentPointIndex++;
-                        statusBox.innerText = `Validé ! Vous êtes à ${(distance * 1000).toFixed(0)}m. Passage au point suivant...`;
-                        statusBox.style.color = "#28a745";
-                        setTimeout(updateGpsUI, 2000);
+            statusBox.innerText = "Recherche de la position en cours...";
+            statusBox.style.color = "#17a2b8";
+            document.getElementById('btnCheckGps').innerText = "Arrêter le suivi GPS";
+
+            geoWatchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const userLat = position.coords.latitude;
+                    const userLng = position.coords.longitude;
+                    const distance = calculateDistanceInKm(userLat, userLng, decryptedCoords.lat, decryptedCoords.lng);
+
+                    logClientDebug(`GPS : [${userLat.toFixed(5)}, ${userLng.toFixed(5)}] | Distance cible : ${distance.toFixed(3)} km`);
+
+                    if (distance <= 1.0) {
+                        stopGeoTracking();
+                        
+                        if (currentPointIndex + 1 < proto.points.length) {
+                            statusBox.innerText = `Point ${currentPointIndex + 1} atteint ! (${(distance * 1000).toFixed(0)}m). Passage au point suivant...`;
+                            statusBox.style.color = "#28a745";
+                            
+                            currentPointIndex++;
+                            setTimeout(() => {
+                                updateGpsUI();
+                                checkUserLocation();
+                            }, 2500);
+                        } else {
+                            statusBox.innerText = "Félicitations ! Dernier point d'extraction atteint. Protocole terminé.";
+                            statusBox.style.color = "#28a745";
+                            document.getElementById('btnCheckGps').style.display = 'none';
+                        }
                     } else {
-                        statusBox.innerText = "Bravo ! Vous avez atteint le dernier point d'extraction.";
-                        statusBox.style.color = "#28a745";
+                        statusBox.innerText = `En route... Distance du point ${currentPointIndex + 1} : ${distance.toFixed(2)} km (Zone de validation : < 1 km)`;
+                        statusBox.style.color = "#ffc107";
                     }
-                } else {
-                    statusBox.innerText = `Hors zone. Vous êtes à ${distance.toFixed(2)} km du point requis (Rayon max : 1 km).`;
+                },
+                (err) => {
+                    logClientDebug(`Erreur de géolocalisation : ${err.message}`);
+                    statusBox.innerText = "Erreur d'accès au GPS. Veuillez vérifier vos autorisations.";
                     statusBox.style.color = "#dc3545";
+                    stopGeoTracking();
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 5000,
+                    timeout: 10000
                 }
-            }, () => {
-                statusBox.innerText = "Erreur GPS : Veuillez autoriser la géolocalisation.";
-                statusBox.style.color = "#dc3545";
-            }, { enableHighAccuracy: true });
+            );
         }
 
         document.addEventListener('keydown', function(e) {
