@@ -1,0 +1,36 @@
+{
+    "BRENAN": {
+        "nom": "Protocole BRENAN (Extraction Prioritaire)",
+        "couleur": "#dc3545",
+        "description": "### MENACE IMMÉDIATE : TRAQUE ACTIVE\n\n- **Situation :** Groupe hostile à vos trousses.\n- **Consignes :** Évacuez immédiatement et rejoignez les points d'extraction successifs dans l'ordre.",
+        "points": [
+            {
+                "nom": "Point d'évacuation 1",
+                "lat": "",
+                "lng": ""
+            },
+            {
+                "nom": "Point d'évacuation 2",
+                "lat": "",
+                "lng": ""
+            }
+        ]
+    },
+    "ADAIR": {
+        "nom": "Protocole ADAIR (Alerte Incendie)",
+        "couleur": "#fd7e14",
+        "description": "### ALERTE INCENDIE : ÉVACUATION IMMÉDIATE\n\nRejoignez le point de ralliement.",
+        "points": [
+            {
+                "nom": "Point d'évacuation 1",
+                "lat": "",
+                "lng": ""
+            },
+            {
+                "nom": "Point d'évacuation 2",
+                "lat": "",
+                "lng": ""
+            }
+        ]
+    }
+}
