@@ -1,76 +1,8 @@
-Cahier des Charges - Projet AubeZero
-1. Introduction et Présentation du Projet
-1.1 Objectif Général
-Le projet AubeZero est un écosystème d'automatisation et de déploiement modulaire pour environnement Linux. Il est développé exclusivement en scripts Shell POSIX (`/bin/sh`) et s'appuie sur une architecture distribuée en sous-modules autonomes.
-1.2 Vocabulaire et Nomenclature
-Agora : Script maître / orchestrateur d'installation.
-Cerbère : Module de gestion centralisée des variables d'environnement et identifiants.
-Mnémosyne : Module de traçabilité et gestion des journaux d'événements (logs).
----
-2. Contraintes Techniques et Execution
-2.1 Langage et Interprète
-Tous les scripts du projet doivent être strictement écrits en POSIX Shell (`#!/bin/sh`) afin de garantir une portabilité maximale sans dépendre de fonctionnalités spécifiques à Bash ou Zsh.
-2.2 Politique d'Affichage et Mode Silencieux
-Principe du silence : Lors de l'exécution des scripts (Agora et sous-modules), aucun affichage ne doit être produit sur la sortie standard (`stdout`). Les redirections appropriées (ex: `>/dev/null`) doivent être appliquées à toutes les commandes sous-jacentes.
-Gestion des erreurs critiques : Seuls les messages d'erreur graves provoquant un arrêt prématuré du programme (symbole `\\\[-]`) doivent être redirigés vers la sortie d'erreur standard (`stderr` / `\\\&2`).
-Suivi d'exécution : Le suivi du déroulement des scripts se fait exclusivement via la consultation du fichier de log généré par Mnémosyne.
----
-3. Architecture et Fonctionnement des Modules
-3.1 Orchestrateur Central : Agora
-Agora est le script d'entrée chargé de déployer l'environnement global.
-Rôle principal :
-Télécharger et installer l'ensemble des prérequis globaux.
-Télécharger/cloner l'ensemble des sous-modules du projet AubeZero.
-Lancer l'exécution de chaque sous-module.
-3.2 Autonomie et Defensive Scripting des Sous-Modules
-Chaque sous-module doit fonctionner de manière totalement autonome :
-Vérification systématique : Au lancement, le sous-module contrôle la présence de ses prérequis système, paquets requis, fichiers et répertoires.
-Auto-installation / Auto-réparation : En cas de prérequis manquant, le sous-module le télécharge, le crée ou l'installe de manière transparente sans intervention utilisateur.
----
-4. Configuration Centralisée : Cerbère
-4.1 Fichier de Configuration
-Les variables globales, chemins et secrets sont stockés dans le fichier :
-```text
-/etc/AubeZero/Cerbere/credentials.env
-```
-4.2 Chargement et Valeurs de Repli (Fallback)
-Tout script AubeZero tente de sourcer le fichier `/etc/AubeZero/Cerbere/credentials.env` dès son initialisation.
-Si le fichier est absent ou qu'une variable spécifique manque, le script doit utiliser une valeur par défaut prédéfinie directement dans le script `sh`.
-Cerbère (ou le sous-module actif) initialise le fichier `/etc/AubeZero/Cerbere/credentials.env` avec les valeurs par défaut si celui-ci n'existe pas.
----
-5. Journalisation et Traçabilité : Mnémosyne
-5.1 Emplacement des Logs
-Tous les événements sont enregistrés dans un fichier situé dans le répertoire spécifié par la variable `PATH\\\_MNEMOSYNE`.
-(Valeur par défaut si non définie : `/var/log/AubeZero/`).
-5.2 Formatage des Entrées de Log
-Chaque ligne ajoutée au fichier de log doit observer la structure exacte suivante :
-```text
-AAAAMMDD-\\\[SOUS-PROGRAMME]-\\\[SOUS-SOUS-PROGRAMME] - \\\[SYMBOLE] Texte
-```
-`AAAAMMDD` : Date du jour au format ISO basique (ex: `20260918`).
-`\\\[SOUS-PROGRAMME]` : Nom du sous-module (ex: `AGORA`, `CERBERE`, `MNEMOSYNE`).
-`\\\[SOUS-SOUS-PROGRAMME]` : Nom du composant ou de la fonction exécutée (ex: `CHECK-DEP`, `INSTALL`).
-`\\\[SYMBOLE]` : Indicateur standard d'état.
-5.3 Convention des Symboles de Log
-Symbole	Usage / Signification	Impact du programme
-`\\\[👉]`	Début de programme / lancement d'étape	Information (Lancement)
-`\\\[+]`	Partie réussie avec succès	Succès
-`\\\[\\\~]`	Partie échouée nécessitant une action secondaire / fallback	Avertissement / Récupération
-`\\\[-]`	Échec grave coupant l'exécution du programme	Erreur Fatale (Sortie sur `stderr` + `exit 1`)
-`\\\[✓]`	Fin du programme	Succès global (Terminé)
----
-6. Exemple d'Exécution et Contenu du Log
-Exécution en ligne de commande :
-```sh
-# Lancement totalement silencieux si aucune erreur grave ne survient
-./agora.sh
-```
-Exemple de contenu du fichier de log (`$PATH\\\_MNEMOSYNE/aubezero.log`) :
-```text
-20260918-AGORA-MAIN - \\\[👉] Démarrage du déploiement AubeZero
-20260918-AGORA-PREFREQ - \\\[+] Verification et installation de curl terminées
-20260918-CERBERE-ENV - \\\[\\\~] credentials.env non trouvé, utilisation des valeurs par défaut
-20260918-CERBERE-ENV - \\\[+] Fichier /etc/AubeZero/Cerbere/credentials.env initialisé
-20260918-SUBMODULE1-DEP - \\\[+] Dépendances validées
-20260918-AGORA-MAIN - \\\[✓] Déploiement AubeZero terminé avec succès
-```
+Cahier des Charges - Projet AubeZero1. Présentation Générale du Projet1.1 ObjectifLe projet AubeZero est une suite d'outils automatisés en scripts Shell POSIX (.sh) conçue pour le déploiement, la gestion des dépendances, l'exécution autonome et la journalisation centralisée sous environnement Linux.1.2 Principes FondamentauxRigueur et Robustesse : Langage Shell POSIX (#!/bin/sh), sans dépendance exclusive à Bash.Architecture Modulaire : Répartition claire entre un orchestrateur principal (Agora), une gestion centralisée des accès/variables (Cerbère) et un système de journalisation (Mnémosyne).Autonomie et Résilience Hors-Ligne : Le serveur doit pouvoir être déconnecté d'Internet à tout moment. Si Internet est accessible, les scripts mettent à jour les composants et ressources. Si Internet est indisponible, le système bascule automatiquement sur les fichiers et paquets déjà présents en local pour garantir un fonctionnement optimal sans interruption.Mode Silencieux (Quiet Mode) : Aucun affichage sur la sortie standard (stdout). Seules les erreurs graves/critiques sont envoyées vers la sortie d'erreur (stderr).Format des Logs Strict : Enregistrement de tous les événements dans le chemin spécifié par PATH_MNEMOSYNE avec des préfixes normés.2. Architecture des Sous-Modules/etc/AubeZero/
+└── Cerbere/
+    └── credentials.env     # Stockage centralisé des variables d'environnement
+
+PATH_MNEMOSYNE/              # Dossier de destination des logs (défini dans credentials.env)
+└── YYYYMMDD-[SOUS-PROGRAMME]-[SOUS-SOUS-PROGRAMME].log
+2.1 Agora (Orchestrateur & Installation)Rôle : Point d'entrée principal du projet.Fonctionnalités :Vérification et installation globale : Détection des prérequis système (outils de base, dépendances).Téléchargement et mise à jour :Test de la connectivité Internet.Si Internet est disponible : Téléchargement ou mise à jour des sous-modules et composants.Si Internet est indisponible : Ignorer les étapes de mise à jour/téléchargement réseau et utiliser directement la version locale des scripts, paquets et fichiers déjà présents.Orchestration : Appels successifs des sous-modules nécessaires.2.2 Cerbère (Gestion de la Configuration)Rôle : Chargement et gestion résiliente des variables d'environnement.Emplacement officiel : /etc/AubeZero/Cerbere/credentials.envComportement :Vérifier la présence du fichier de configuration.Si le fichier ou une variable donnée est absent(e), appliquer la valeur par défaut codée en dur dans les scripts.Créer le dossier /etc/AubeZero/Cerbere/ et le fichier credentials.env s'ils n'existent pas encore.2.3 Mnémosyne (Système de Journalisation)Rôle : Centralisation et formatage des journaux d'exécution (logs).Emplacement des logs : Défini par la variable PATH_MNEMOSYNE (avec valeur par défaut si non spécifiée).Format du nom de fichier :AAAAMMDD-[SOUS-PROGRAMME]-[SOUS-SOUS-PROGRAMME] (ex: 20260918-AGORA-INSTALL.log)3. Spécifications Techniques et Contraintes3.1 Langage et CompatibilitéLangage exclusif : Shell POSIX (/bin/sh).Aucune extension spécifique à Bash ([[ ]], arrays, etc.) ne doit être utilisée afin de garantir une portée universelle sur tout système UNIX/Linux.3.2 Gestion du Réseau et Mode Hors-Ligne (Air-Gap)Détection du réseau : Chaque opération nécessitant du réseau doit préalablement tester la connectivité (ex: test de ping ou de résolution DNS à timeout court).Comportement hybride :En ligne : Synchroniser/mettre à jour les sous-modules, télécharger les paquets requis.Hors ligne : Passer silencieusement l'étape de mise à jour réseau sans générer d'erreur bloquante et poursuivre l'exécution avec la copie locale disponible.3.3 Gestion de l'Affichage et des Sorties (Mode Silencieux)stdout (Sortie standard) : Redirigée intégralement vers /dev/null ou vers le fichier de log Mnémosyne. Aucun texte ne doit apparaître à l'écran en fonctionnement normal.stderr (Sortie d'erreur) : Réservée exclusivement aux erreurs graves/critiques provoquant l'arrêt d'un sous-programme ou un dysfonctionnement majeur.En cas d'erreur grave, le message d'erreur est envoyé sur stderr et l'exécution s'interrompt avec un code d'erreur non nul (exit 1 ou supérieur).3.4 Autonomie des Sous-ModulesChaque sous-module doit être autonome :Il doit charger credentials.env (ou utiliser ses valeurs par défaut).Il doit vérifier ses propres prérequis système et tenter de les installer/créer localement si nécessaire.Si l'installation d'un prérequis nécessite du réseau et qu'Internet est indisponible, le sous-module vérifie si l'outil local existant est utilisable ; à défaut, il enregistre un échec [-] et s'interrompt.4. Normalisation des Logs (Mnémosyne)Chaque ligne écrite dans le fichier de log doit respecter la convention stricte suivante :[INDICATEUR] - Message de log
+Table des IndicateursSymboliqueSignificationUtilisation[👉]Début de programmeMarque le lancement d'un sous-module ou d'un processus.[+]Partie réussieÉtape validée avec succès.[~]Partie échouée (Action secondaire)Échec d'une étape non critique n'interrompant pas le programme (ex: échec de mise à jour réseau basculant sur la version locale).[-]Échec fatalÉchec critique provoquant la fin prématurée du programme.[✓]Fin de programmeMarque la fermeture réussie d'un sous-module.
