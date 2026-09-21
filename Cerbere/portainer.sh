@@ -1,126 +1,142 @@
-#!/bin/bash
-# cerbere-portainer.sh
+#!/bin/sh
+# Cerbere - Portainer
 # @Author : ROYJohan
 # @Version : 3.0.0
-# @Date : 15/09/2026 13:42
-# @Desc : Installation de la commande Portainer pour AubeZero + gestion du conteneur
+# @Date : 2026-09-21
+# @Desc : Installation de la commande Portainer pour AubeZero et gestion du conteneur
 
-set -euo pipefail
+# Stop en cas d'erreur ou de variable non definie
+set -eu
 
-# === Chargement des credentials === #
-CREDENTIALS_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
-
-if [[ -f "$CREDENTIALS_FILE" ]]; then
-    set -a
-    source "$CREDENTIALS_FILE"
-    set +a
-else
-    PATH_MNEMOSYNE=""
+# === 1. Vérification des droits root ===
+if [ "$(id -u)" -ne 0 ]; then
+    echo "[-] Ce script doit être exécuté en tant que root." >&2
+    exit 1
 fi
 
-# === LOG SYSTEM === #
-Programme="Cerbere-Portainer"
+# === 2. Répertoires et configuration Cerbere ===
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
 
-if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
-    LOG_DIR="$PATH_MNEMOSYNE"
-else
-    LOG_DIR="$DEFAULT_LOG_DIR"
+mkdir -p "$CERBERE_DIR"
+
+# Chargement dynamique du fichier credentials.env s'il existe
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
 fi
 
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+# Valeurs par défaut
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
+
+# === 3. Initialisation de la journalisation Mnémosyne ===
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-CERBERE-PORTAINER.log"
 
 log() {
-    mkdir -p "$LOG_DIR" > /dev/null
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
 }
 
-log "[👉] Installation de la commande Portainer"
+log "👉" "Installation et configuration de la commande Portainer"
 
-# === Variables par défaut === #
+# Redirection de stdout globale vers le log Mnémosyne (Quiet mode)
+exec 1>>"$LOG_FILE"
+
+# === 4. Variables de configuration ===
 PORTAINER_PORT="${PORT_PORTAINER:-1005}"
 PORTAINER_CONFIG="${PATH_PORTAINER_CONFIG:-/media/Runable/Docker/Portainer}"
-
-# === Création de la commande /usr/local/bin/portainer === #
 COMMAND_PATH="/usr/local/bin/portainer"
 
-log "[~] Génération de la commande Portainer"
+log "~" "Génération du wrapper CLI POSIX : $COMMAND_PATH"
 
+# === 5. Génération de la commande /usr/local/bin/portainer ===
 cat << 'EOF' > "$COMMAND_PATH"
-#!/bin/bash
-set -euo pipefail
+#!/bin/sh
+# Cerbere - Portainer CLI Wrapper
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 2026-09-21
+# @Desc : Gestionnaire CLI du conteneur Portainer
 
-Programme="Cerbere-Portainer"
+set -eu
 
-# === Chargement des credentials === #
-CREDENTIALS_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
 
-if [[ -f "$CREDENTIALS_FILE" ]]; then
-    set -a
-    source "$CREDENTIALS_FILE"
-    set +a
-else
-    PATH_MNEMOSYNE=""
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
 fi
 
-# === LOG SYSTEM === #
-if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
-    LOG_DIR="$PATH_MNEMOSYNE"
-else
-    LOG_DIR="$DEFAULT_LOG_DIR"
-fi
-
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-CERBERE-PORTAINER.log"
 
 log() {
-    mkdir -p "$LOG_DIR" > /dev/null
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
 }
 
-# === Variables === #
 PORTAINER_PORT="${PORT_PORTAINER:-1005}"
 PORTAINER_CONFIG="${PATH_PORTAINER_CONFIG:-/media/Runable/Docker/Portainer}"
 
 check_docker() {
     if ! command -v docker >/dev/null 2>&1; then
-        log "[-] Docker n'est pas installé"
+        log "[-]" "Docker n'est pas installé ou introuvable"
+        echo "[-] Erreur : Docker n'est pas disponible." >&2
         exit 1
     fi
 }
 
 start_portainer() {
     check_docker
-    docker start portainer >/dev/null 2>&1 \
-        && log "[+] Portainer démarré" \
-        || log "[-] Impossible de démarrer Portainer"
+    if docker start portainer >/dev/null 2>&1; then
+        log "+" "Portainer démarré"
+    else
+        log "[-]" "Impossible de démarrer le conteneur Portainer"
+    fi
 }
 
 stop_portainer() {
     check_docker
-    docker stop portainer >/dev/null 2>&1 \
-        && log "[+] Portainer arrêté" \
-        || log "[-] Impossible d'arrêter Portainer"
+    if docker stop portainer >/dev/null 2>&1; then
+        log "+" "Portainer arrêté"
+    else
+        log "[-]" "Impossible d'arrêter le conteneur Portainer"
+    fi
 }
 
 restart_portainer() {
     check_docker
-    docker restart portainer >/dev/null 2>&1 \
-        && log "[+] Portainer redémarré" \
-        || log "[-] Impossible de redémarrer Portainer"
+    if docker restart portainer >/dev/null 2>&1; then
+        log "+" "Portainer redémarré"
+    else
+        log "[-]" "Impossible de redémarrer le conteneur Portainer"
+    fi
 }
 
 update_portainer() {
     check_docker
-    log "[~] Mise à jour Portainer..."
+    log "~" "Mise à jour de l'image Portainer..."
 
-    docker pull portainer/portainer-ce:latest >/dev/null 2>&1 \
-        || { log "[-] Impossible de télécharger la nouvelle image"; exit 1; }
+    if ! docker pull portainer/portainer-ce:latest >/dev/null 2>&1; then
+        log "[-]" "Téléchargement de la nouvelle image Portainer échoué"
+        exit 1
+    fi
 
     docker rm -f portainer >/dev/null 2>&1 || true
-    log "[~] Ancien conteneur supprimé"
+    log "~" "Ancien conteneur Portainer supprimé"
 
-    docker run -d \
+    mkdir -p "$PORTAINER_CONFIG" >/dev/null 2>&1 || true
+
+    if docker run -d \
         --name portainer \
         --privileged \
         --restart unless-stopped \
@@ -130,20 +146,22 @@ update_portainer() {
         -p "${PORTAINER_PORT}:9000" \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v "${PORTAINER_CONFIG}:/data" \
-        portainer/portainer-ce:latest \
-        >/dev/null 2>&1 \
-        || { log "[-] Impossible de recréer Portainer"; exit 1; }
-
-    log "[+] Portainer mis à jour et recréé"
+        portainer/portainer-ce:latest >/dev/null 2>&1; then
+        log "+" "Conteneur Portainer mis à jour et démarré avec succès"
+    else
+        log "[-]" "Échec de la récréation du conteneur Portainer"
+        exit 1
+    fi
 }
 
 status_portainer() {
-    if docker ps | grep -q portainer; then
-        log "[+] Portainer est en cours d'exécution"
-        echo "Portainer est en cours d'exécution"
+    check_docker
+    if docker ps --format '{{.Names}}' | grep -q "^portainer$"; then
+        log "=" "Portainer est en cours d'exécution"
+        echo "Portainer est en cours d'exécution."
     else
-        log "[~] Portainer est arrêté"
-        echo "Portainer est arrêté"
+        log "~" "Portainer est arrêté"
+        echo "Portainer est arrêté."
     fi
 }
 
@@ -161,6 +179,6 @@ esac
 EOF
 
 chmod +x "$COMMAND_PATH"
-log "[+] Commande Portainer installée : /usr/local/bin/portainer"
+log "+" "Commande exécutable Portainer installée : $COMMAND_PATH"
 
-log "[✓] Installation Cerbere-Portainer terminée"
+log "✓" "Installation de Cerbere-Portainer terminée avec succès"
