@@ -1,10 +1,9 @@
 #!/bin/sh
-
-# ==========================================
-# Projet : AubeZero
-# Module : Agora / Install
-# Description : Script principal d'installation et d'orchestration
-# ==========================================
+# Agora - Install
+# @Author : ROYJohan
+# @Version : 1.0.0
+# @Date : 2026-09-21
+# @Desc : Script principal d'orchestration, de déploiement et d'initialisation du système AubeZero
 
 # Stop en cas d'erreur ou de variable non définie
 set -eu
