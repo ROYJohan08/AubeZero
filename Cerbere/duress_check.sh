@@ -1,48 +1,71 @@
-#!/bin/bash
-# duress_check.sh
+#!/bin/sh
+# Cerbere - Duress-Check
 # @Author : ROYJohan
 # @Version : 3.0.0
-# @Date : 15/09/2026 13:39
-# @Desc : Vérification du code Duress et déclenchement du scénario Hades DDay
+# @Date : 2026-09-21
+# @Desc : Verification du code Duress et declenchement du scenario Hades DDay
 
-set -euo pipefail
+# Stop en cas d'erreur ou de variable non definie
+set -eu
 
-# === Chargement des credentials === #
-CREDENTIALS_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-if [[ -f "$CREDENTIALS_FILE" ]]; then
-    set -a
-    source "$CREDENTIALS_FILE"
-    set +a
+# === 1. Chargement de la configuration ===
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
+
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
 else
     exit 1
 fi
 
-# === Récupération du code duress === #
+# Valeurs par defaut
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
 DURESS_HASH="${PASSWORD_DURESS:-M3m0ry4*}"
+TOKEN_HIGH="${PASSWORD_HIGH:-}"
 
-# === Lecture du mot de passe fourni par PAM === #
-IFS= read -r PASSWORD
+# === 2. Initialisation de la journalisation Mnemosyne ===
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-CERBERE-DURESS-CHECK.log"
 
-# === Vérification du code duress === #
-if [[ "$PASSWORD" = "$DURESS_HASH" ]]; then
+log() {
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
+}
 
-    # === Appel API SecurePass === #
+# Redirection globale de stdout vers le log Mnemosyne (Quiet mode)
+exec 1>>"$LOG_FILE"
+
+# === 3. Lecture du mot de passe fourni par PAM ===
+IFS= read -r PASSWORD || PASSWORD=""
+
+# === 4. Verification du code Duress ===
+if [ "$PASSWORD" = "$DURESS_HASH" ]; then
+    log "⚠️" "Code Duress detecte ! Declenchement des procedures d'urgence"
+
+    # === Appel API SecurePass en arriere-plan ===
+    log "~" "Envoi du signal d'alerte SecurePass"
     curl -s -X POST https://api.royjohan.fr/securepass.php \
          -H "User-Agent: Mozilla/5.0" \
-         -d "scenario=DURESS&token=$PASSWORD_HIGH" \
-         > /dev/null 2>&1 &
+         -d "scenario=DURESS&token=$TOKEN_HIGH" \
+         >/dev/null 2>&1 &
 
-    # === Préparation du script DDay === #
-    SCRIPT_PATH="/etc/AubeZero/Hades/DDay.sh"
+    # === Preparation et lancement du scenario Hades DDay ===
+    SCRIPT_PATH="$BASE_DIR/Hades/DDay.sh"
     SERVICE_NAME="dday.service"
     SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 
-    # === Activation du script si présent === #
-    if [[ -f "$SCRIPT_PATH" ]]; then
-        chmod +x "$SCRIPT_PATH"
+    if [ -f "$SCRIPT_PATH" ]; then
+        chmod 700 "$SCRIPT_PATH" 2>/dev/null || true
+        log "+" "Script $SCRIPT_PATH configure"
+    else
+        log "[-]" "Script $SCRIPT_PATH introuvable"
     fi
 
-    # === Création du service systemd === #
+    log "~" "Creation du service systemd $SERVICE_NAME"
     cat <<EOF > "$SERVICE_PATH"
 [Unit]
 Description=Service Hades DDay
@@ -59,8 +82,9 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-    # === Activation du service === #
-    systemctl daemon-reload
-    systemctl enable "$SERVICE_NAME"
-    systemctl restart "$SERVICE_NAME"
+    log "~" "Activation et execution du service $SERVICE_NAME"
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
+    systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 || true
+    log "✓" "Scenario Hades DDay active avec succes"
 fi
