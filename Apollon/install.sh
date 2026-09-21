@@ -1,157 +1,148 @@
-#!/bin/bash
-# install.sh
+#!/bin/sh
+# AubeZero - Master Installer
 # @Author : ROYJohan
 # @Version : 3.0.0
-# @Date : 15/09/2026 14:00
+# @Date : 2026-09-21
 # @Desc : Installateur maître AubeZero (Cerbere, Apollon, Hermes, Agora, Hades)
 
-set -euo pipefail
+# Stop en cas d'erreur ou de variable non définie
+set -eu
 
-Programme="AubeZero-Installer"
-
-# === Vérification root === #
-if [[ $EUID -ne 0 ]]; then
-    echo "[-] Ce script doit être exécuté en root."
+# === 1. Vérification des droits root ===
+if [ "$(id -u)" -ne 0 ]; then
+    echo "[-] Ce script doit être exécuté en tant que root." >&2
     exit 1
 fi
 
-# === Chargement credentials === #
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+# === 2. Répertoires et configuration Cerbere ===
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
 
-if [[ -f "$CRED_FILE" ]]; then
-    set -a
-    source "$CRED_FILE"
-    set +a
-else
-    PATH_MNEMOSYNE=""
+mkdir -p "$CERBERE_DIR"
+
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
 fi
 
-# === LOG SYSTEM === #
-if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
-    LOG_DIR="$PATH_MNEMOSYNE"
-else
-    LOG_DIR="$DEFAULT_LOG_DIR"
-fi
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
 
-mkdir -p "$LOG_DIR"
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+# === 3. Initialisation de la journalisation Mnémosyne ===
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-AUBEZERO-INSTALLER.log"
 
 log() {
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
 }
 
-log "[👉] Démarrage de l’installateur maître AubeZero"
+log "👉" "Démarrage de l'installateur maître AubeZero"
 
-# === Dossiers AubeZero === #
-mkdir -p /etc/AubeZero
-mkdir -p /etc/AubeZero/Cerbere
-mkdir -p /etc/AubeZero/Apollon
-mkdir -p /etc/AubeZero/Hermes
-mkdir -p /etc/AubeZero/Agora
-mkdir -p /etc/AubeZero/Hades
+# Redirection globale de stdout vers le log Mnémosyne (Quiet mode)
+exec 1>>"$LOG_FILE"
 
-log "[+] Arborescence AubeZero créée"
+# === 4. Création de l'arborescence AubeZero ===
+mkdir -p "$BASE_DIR/Apollon"
+mkdir -p "$BASE_DIR/Hermes"
+mkdir -p "$BASE_DIR/Agora"
+mkdir -p "$BASE_DIR/Hades"
 
-# === Dépendances globales === #
+log "+" "Arborescence AubeZero créée"
+
+# === 5. Installation des dépendances globales ===
 install_dep() {
-    if command -v "$1" >/dev/null 2>&1; then
-        log "[=] Dépendance OK : $1"
-        return
+    _pkg="$1"
+    if command -v "$_pkg" >/dev/null 2>&1; then
+        log "=" "Dépendance OK : $_pkg"
+        return 0
     fi
 
-    log "[~] Installation dépendance : $1"
-    apt-get update -qq
-    apt-get install -y -qq "$1"
+    log "~" "Installation de la dépendance : $_pkg"
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq >/dev/null 2>&1
+        apt-get install -y -qq "$_pkg" >/dev/null 2>&1
+    else
+        log "[-]" "Gestionnaire de paquets non supporté pour installer $_pkg"
+        exit 1
+    fi
 }
 
 install_dep "curl"
 install_dep "git"
 install_dep "jq"
-install_dep "docker.io"
 
-log "[+] Dépendances globales installées"
+log "+" "Dépendances globales installées"
 
-# === Téléchargement du dépôt AubeZero === #
+# === 6. Téléchargement / Mise à jour du dépôt AubeZero ===
 AUBEZERO_GITHUB="https://github.com/ROYJohan08/AubeZero.git"
-AUBEZERO_LOCAL="/etc/AubeZero/AubeZeroRepo"
+AUBEZERO_LOCAL="$BASE_DIR/AubeZeroRepo"
 
-if [[ ! -d "$AUBEZERO_LOCAL/.git" ]]; then
-    log "[~] Clonage du dépôt AubeZero"
-    git clone "$AUBEZERO_GITHUB" "$AUBEZERO_LOCAL" >/dev/null 2>&1 \
-        && log "[+] Dépôt cloné" \
-        || { log "[-] Échec clonage dépôt"; exit 1; }
+if [ ! -d "$AUBEZERO_LOCAL/.git" ]; then
+    log "~" "Clonage du dépôt AubeZero..."
+    if git clone "$AUBEZERO_GITHUB" "$AUBEZERO_LOCAL" >/dev/null 2>&1; then
+        log "+" "Dépôt AubeZero cloné avec succès"
+    else
+        log "[-]" "Échec du clonage du dépôt AubeZero"
+        exit 1
+    fi
 else
-    log "[~] Mise à jour du dépôt AubeZero"
-    git -C "$AUBEZERO_LOCAL" pull >/dev/null 2>&1 \
-        && log "[+] Dépôt mis à jour" \
-        || log "[−] Échec mise à jour dépôt"
+    log "~" "Mise à jour du dépôt AubeZero..."
+    if git -C "$AUBEZERO_LOCAL" pull >/dev/null 2>&1; then
+        log "+" "Dépôt AubeZero mis à jour avec succès"
+    else
+        log "[-]" "Échec de la mise à jour du dépôt AubeZero"
+    fi
 fi
 
-# === Installation des modules Cerbere === #
+# === 7. Installation des modules Cerbere ===
 install_module() {
-    local module="$1"
-    local script="/etc/AubeZero/AubeZeroRepo/Cerbere/${module}.sh"
+    _module="$1"
+    _script="$AUBEZERO_LOCAL/Cerbere/${_module}.sh"
 
-    if [[ -f "$script" ]]; then
-        log "[~] Installation module : $module"
-        bash "$script"
-        log "[+] Module installé : $module"
+    if [ -f "$_script" ]; then
+        log "~" "Installation du module : $_module"
+        if sh "$_script"; then
+            log "+" "Module installé avec succès : $_module"
+        else
+            log "[-]" "Erreur lors de l'exécution du script module : $_module"
+        fi
     else
-        log "[-] Module introuvable : $module"
+        log "[-]" "Script du module introuvable : $_script"
     fi
 }
 
-MODULES=(
-    "cerbere-duress"
-    "cerbere-watchdog"
-    "cerbere-glancews"
-    "cerbere-portainer"
-    "cerbere-vaultwarden"
-    "cerbere-siyuan"
-    "cerbere-kolibri"
-    "cerbere-kiwix"
-    "cerbere-gitea"
-)
+MODULES="cerbere-duress cerbere-watchdog cerbere-glancews cerbere-portainer cerbere-vaultwarden cerbere-siyuan cerbere-kolibri cerbere-kiwix cerbere-gitea"
 
-for m in "${MODULES[@]}"; do
+for m in $MODULES; do
     install_module "$m"
 done
 
-log "[✓] Tous les modules Cerbere installés"
+log "✓" "Tous les modules Cerbere ont été traités"
 
-# === Installation des commandes globales === #
+# === 8. Installation des commandes globales ===
 install_cmd() {
-    local cmd="$1"
-    local script="/etc/AubeZero/AubeZeroRepo/Commands/${cmd}.sh"
+    _cmd="$1"
+    _script="$AUBEZERO_LOCAL/Commands/${_cmd}.sh"
 
-    if [[ -f "$script" ]]; then
-        cp "$script" "/usr/bin/${cmd}"
-        chmod +x "/usr/bin/${cmd}"
-        log "[+] Commande installée : $cmd"
+    if [ -f "$_script" ]; then
+        cp "$_script" "/usr/bin/${_cmd}"
+        chmod +x "/usr/bin/${_cmd}"
+        log "+" "Commande installée : /usr/bin/${_cmd}"
     else
-        log "[-] Commande introuvable : $cmd"
+        log "[-]" "Fichier de commande introuvable : $_script"
     fi
 }
 
-COMMANDS=(
-    "duress"
-    "watchdog"
-    "glances"
-    "portainer"
-    "vaultwarden"
-    "siyuan"
-    "kolibri"
-    "kiwix"
-    "gitea"
-)
+COMMANDS="duress watchdog glances portainer vaultwarden siyuan kolibri kiwix gitea"
 
-for c in "${COMMANDS[@]}"; do
+for c in $COMMANDS; do
     install_cmd "$c"
 done
 
-log "[✓] Commandes globales installées"
+log "✓" "Commandes globales installées"
 
-# === Fin === #
-log "[✓] Installation complète AubeZero terminée"
-echo "[✓] Installation complète AubeZero terminée"
+# === 9. Fin d'exécution ===
+log "✓" "Installation complète AubeZero terminée"
