@@ -1,129 +1,137 @@
-#!/bin/bash
-# cerbere-watchdog.sh
+#!/bin/sh
+# Cerbere - Watchdog
 # @Author : ROYJohan
 # @Version : 3.0.0
-# @Date : 15/09/2026 13:46
+# @Date : 2026-09-21
 # @Desc : Installation et configuration du watchdog Cerbere
 
-exec 1>/dev/null
-set -euo pipefail
+set -eu
 
-Programme="Cerbere-WatchDog"
-
-# === Chargement des credentials === #
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
-DEFAULT_CERBERE_PATH="/etc/AubeZero/Cerbere"
-
-if [[ -f "$CRED_FILE" ]]; then
-    set -a
-    source "$CRED_FILE"
-    set +a
-else
-    PATH_MNEMOSYNE=""
-    PATH_CERBERE="$DEFAULT_CERBERE_PATH"
+# === 1. Vérification des droits root ===
+if [ "$(id -u)" -ne 0 ]; then
+    echo "[-] Ce script doit être exécuté en tant que root." >&2
+    exit 1
 fi
 
-# === LOG SYSTEM === #
-if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
-    LOG_DIR="$PATH_MNEMOSYNE"
-else
-    LOG_DIR="$DEFAULT_LOG_DIR"
+# === 2. Répertoires et configuration Cerbere ===
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
+
+mkdir -p "$CERBERE_DIR"
+
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
 fi
 
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
+
+# === 3. Initialisation de la journalisation Mnémosyne ===
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-CERBERE-WATCHDOG.log"
 
 log() {
-    mkdir -p "$LOG_DIR" > /dev/null
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
 }
 
-# === Installation du Watchdog === #
-REPAIR_SCRIPT="${PATH_CERBERE:-$DEFAULT_CERBERE_PATH}/network-repair.sh"
+log "👉" "Début de l'installation et configuration du Watchdog"
 
-# Fallback des variables
+# Redirection globale de stdout vers le log Mnémosyne
+exec 1>>"$LOG_FILE"
+
+# === 4. Variables de configuration ===
+REPAIR_SCRIPT="$CERBERE_DIR/network-repair.sh"
 MAX_LOAD="${MAX_LOAD:-24}"
 MIN_MEM="${MIN_MEM:-1}"
 PING_TARGET="${PING_TARGET:-1.1.1.1}"
 
-log "[👉] Installation du watchdog"
-
-# === Configuration kernel auto-reboot === #
+# === 5. Configuration kernel auto-reboot ===
 SYSCTL_CONF="/etc/sysctl.d/99-autoreboot.conf"
 
-if [[ ! -f "$SYSCTL_CONF" ]]; then
-    log "[+] Configuration des paramètres kernel d'auto-reboot..."
+if [ ! -f "$SYSCTL_CONF" ]; then
+    log "+" "Configuration des paramètres kernel d'auto-reboot..."
     cat << 'EOF' > "$SYSCTL_CONF"
 kernel.panic = 10
 kernel.hung_task_timeout_secs = 120
 vm.panic_on_oom = 1
 EOF
-    sysctl --system > /dev/null 2>&1
+    sysctl --system > /dev/null 2>&1 || true
 else
-    log "[=] La configuration kernel auto-reboot existe déjà."
+    log "=" "La configuration kernel auto-reboot existe déjà."
 fi
 
-# === Installation du paquet watchdog === #
-if ! command -v watchdog &>/dev/null; then
-    log "[~] Installation du paquet watchdog..."
-    apt-get update -qq > /dev/null
-    apt-get install -y watchdog -qq > /dev/null
-    log "[+] Paquet watchdog installé."
+# === 6. Installation du paquet watchdog ===
+if ! command -v watchdog >/dev/null 2>&1; then
+    log "~" "Installation du paquet watchdog..."
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq > /dev/null 2>&1
+        apt-get install -y -qq watchdog > /dev/null 2>&1
+        log "+" "Paquet watchdog installé avec succès."
+    else
+        log "[-]" "Gestionnaire de paquets non supporté."
+        exit 1
+    fi
 else
-    log "[=] Le paquet watchdog est déjà installé."
+    log "=" "Le paquet watchdog est déjà installé."
 fi
 
-# === Création du script de réparation réseau === #
-mkdir -p "$(dirname "$REPAIR_SCRIPT")"
-
-if [[ ! -f "$REPAIR_SCRIPT" ]]; then
-    log "[+] Création du script de réparation : $REPAIR_SCRIPT"
+# === 7. Création du script de réparation réseau ===
+if [ ! -f "$REPAIR_SCRIPT" ]; then
+    log "+" "Création du script de réparation : $REPAIR_SCRIPT"
 
     cat << EOF > "$REPAIR_SCRIPT"
-#!/bin/bash
-exec 1>/dev/null
-exec 2>&1
+#!/bin/sh
+# Cerbere - NetworkRepair
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 2026-09-21
+# @Desc : Script de secours réseau exécuté par Watchdog
 
-Programme="Cerbere-NetworkRepair"
+set -eu
 
-# === LOG SYSTEM === #
-LOG_DIR="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
-LOG_FILE="\${LOG_DIR}/\$(date +%Y-%m).log"
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
+mkdir -p "\$PATH_MNEMOSYNE"
+DATE_LOG=\$(date +'%Y%m%d')
+LOG_FILE="\$PATH_MNEMOSYNE/\${DATE_LOG}-CERBERE-NETWORKREPAIR.log"
 
 log() {
-    mkdir -p "\$LOG_DIR" > /dev/null
-    echo "\$(date +'%Y%m%d%H:%M')-\${Programme}-\$1" >> "\$LOG_FILE"
+    _tag="\$1"
+    _msg="\$2"
+    echo "[\$_tag] - \$(date +'%Y-%m-%d %H:%M:%S') - \$_msg" >> "\$LOG_FILE"
 }
 
-log "[WATCHDOG] Perte de connexion détectée. Redémarrage de systemd-networkd"
-systemctl restart systemd-networkd
+log "~" "Perte de connexion détectée. Redémarrage de systemd-networkd..."
+systemctl restart systemd-networkd >/dev/null 2>&1 || true
 sleep 5
 
-if ping -c 1 -W 2 $PING_TARGET > /dev/null 2>&1; then
-    log "[WATCHDOG] Connexion réseau rétablie avec succès."
+if ping -c 1 -W 2 "$PING_TARGET" > /dev/null 2>&1; then
+    log "+" "Connexion réseau rétablie avec succès."
     exit 0
 else
-    log "[WATCHDOG] Échec du rétablissement. Le serveur va rebooter."
+    log "[-]" "Échec du rétablissement réseau. Déclenchement du redémarrage..."
     exit 1
 fi
 EOF
 
-    chmod +x "$REPAIR_SCRIPT" > /dev/null
+    chmod +x "$REPAIR_SCRIPT"
 else
-    log "[=] Le script de réparation réseau existe déjà."
+    log "=" "Le script de réparation réseau existe déjà."
 fi
 
-# === Configuration watchdog.conf === #
+# === 8. Configuration watchdog.conf ===
 WATCHDOG_CONF="/etc/watchdog.conf"
 
-if [[ ! -f "$WATCHDOG_CONF" ]] || [[ ! -f "${WATCHDOG_CONF}.bak" ]]; then
+if [ ! -f "$WATCHDOG_CONF" ] || [ ! -f "${WATCHDOG_CONF}.bak" ]; then
 
-    # Backup si nécessaire
-    if [[ -f "$WATCHDOG_CONF" ]] && [[ ! -f "${WATCHDOG_CONF}.bak" ]]; then
-        cp "$WATCHDOG_CONF" "${WATCHDOG_CONF}.bak" > /dev/null
+    if [ -f "$WATCHDOG_CONF" ] && [ ! -f "${WATCHDOG_CONF}.bak" ]; then
+        cp "$WATCHDOG_CONF" "${WATCHDOG_CONF}.bak" > /dev/null 2>&1
     fi
 
-    log "[+] Configuration initiale de $WATCHDOG_CONF..."
+    log "+" "Configuration initiale de $WATCHDOG_CONF..."
 
     cat << EOF > "$WATCHDOG_CONF"
 watchdog-device = /dev/watchdog
@@ -136,10 +144,10 @@ repair-timeout = 30
 EOF
 
 else
-    log "[=] Le fichier $WATCHDOG_CONF existe déjà. Configuration conservée."
+    log "=" "Le fichier $WATCHDOG_CONF existe déjà. Configuration conservée."
 fi
 
-# === Activation du service watchdog === #
-systemctl enable watchdog --now > /dev/null 2>&1
+# === 9. Activation du service watchdog ===
+systemctl enable watchdog --now > /dev/null 2>&1 || true
 
-log "[✓] Installation et configuration du watchdog terminée"
+log "✓" "Installation et configuration du Watchdog terminées"
