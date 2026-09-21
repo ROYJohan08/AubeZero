@@ -1,78 +1,91 @@
-#!/bin/bash
-# cerbere-gitea.sh
+#!/bin/sh
+# Cerbere - Gitea
 # @Author : ROYJohan
 # @Version : 3.0.0
-# @Date : 15/09/2026 13:55
+# @Date : 2026-09-21
 # @Desc : Installation, mise à jour et miroir automatique du projet AubeZero dans Gitea
 
-set -euo pipefail
+# Stop en cas d'erreur ou de variable non definie
+set -eu
 
-Programme="Cerbere-Gitea"
+# === 1. Vérification des droits root ===
+if [ "$(id -u)" -ne 0 ]; then
+    echo "[-] Ce script doit être exécuté en tant que root." >&2
+    exit 1
+fi
 
-# === Chargement credentials === #
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+# === 2. Répertoires et configuration Cerbere ===
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
+
+mkdir -p "$CERBERE_DIR"
+
+# Chargement dynamique du fichier credentials.env s'il existe
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
+fi
+
+# Valeurs par défaut
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
 DEFAULT_GITEA_PATH="/media/Docs01/Gitea"
 DEFAULT_GITEA_PORT="3000"
 
-if [[ -f "$CRED_FILE" ]]; then
-    set -a
-    source "$CRED_FILE"
-    set +a
-else
-    PATH_MNEMOSYNE=""
-    PATH_GITEA="$DEFAULT_GITEA_PATH"
-    PORT_GITEA="$DEFAULT_GITEA_PORT"
-fi
-
-# === LOG SYSTEM === #
-if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
-    LOG_DIR="$PATH_MNEMOSYNE"
-else
-    LOG_DIR="$DEFAULT_LOG_DIR"
-fi
-
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
-
-log() {
-    mkdir -p "$LOG_DIR"
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
-}
-
-log "[👉] Début du module Gitea"
-
-# === Variables === #
 GITEA_DIR="${PATH_GITEA:-$DEFAULT_GITEA_PATH}"
 GITEA_PORT="${PORT_GITEA:-$DEFAULT_GITEA_PORT}"
 AUBEZERO_GITHUB="https://github.com/ROYJohan08/AubeZero.git"
 MIRROR_DIR="${GITEA_DIR}/mirror/AubeZero"
 
+# === 3. Initialisation de la journalisation Mnémosyne ===
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-CERBERE-GITEA.log"
+
+log() {
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
+}
+
+log "👉" "Début du module Cerbere-Gitea"
+
+# Redirection globale de stdout vers le log Mnémosyne (Quiet mode)
+exec 1>>"$LOG_FILE"
+
+# === 4. Préparation de l'arborescence ===
 mkdir -p "$GITEA_DIR"
 mkdir -p "$(dirname "$MIRROR_DIR")"
 
-# === Dépendances === #
+# === 5. Vérification des dépendances ===
 check_dep() {
-    if command -v "$1" >/dev/null 2>&1; then
-        log "[=] Dépendance OK : $1"
-        return
+    _pkg="$1"
+    if command -v "$_pkg" >/dev/null 2>&1; then
+        log "=" "Dépendance OK : $_pkg"
+        return 0
     fi
 
-    log "[~] Installation dépendance : $1"
-    apt-get update -qq
-    apt-get install -y -qq "$1"
+    log "~" "Installation de la dépendance : $_pkg"
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq >/dev/null 2>&1
+        apt-get install -y -qq "$_pkg" >/dev/null 2>&1
+    else
+        log "[-]" "Gestionnaire de paquets non supporté pour installer $_pkg"
+        exit 1
+    fi
 }
 
 check_dep "docker"
 check_dep "git"
 
-# === Fonction : création / recréation du Docker Gitea === #
+# === 6. Création / Recréation du conteneur Docker Gitea ===
 create_gitea_docker() {
-    log "[~] Recréation du conteneur Gitea"
+    log "~" "Recréation du conteneur Gitea..."
 
     docker rm -f gitea >/dev/null 2>&1 || true
     docker pull gitea/gitea:latest >/dev/null 2>&1
 
-    docker run -d \
+    if docker run -d \
         --name gitea \
         --restart unless-stopped \
         -p "${GITEA_PORT}:3000" \
@@ -80,76 +93,82 @@ create_gitea_docker() {
         -v "${GITEA_DIR}:/data" \
         -v /etc/timezone:/etc/timezone:ro \
         -v /etc/localtime:/etc/localtime:ro \
-        gitea/gitea:latest >/dev/null 2>&1
-
-    log "[+] Conteneur Gitea opérationnel"
+        gitea/gitea:latest >/dev/null 2>&1; then
+        log "+" "Conteneur Gitea créé et opérationnel"
+    else
+        log "[-]" "Échec lors de la création du conteneur Gitea"
+        exit 1
+    fi
 }
 
 create_gitea_docker
 
-# === Fonction : miroir automatique du projet AubeZero === #
+# === 7. Miroir automatique du projet AubeZero ===
 mirror_aubezero() {
-    log "[~] Synchronisation du projet AubeZero → Gitea"
+    log "~" "Synchronisation du dépôt AubeZero vers le miroir local Gitea..."
 
     mkdir -p "$MIRROR_DIR"
 
-    if [[ ! -d "$MIRROR_DIR/.git" ]]; then
-        log "[~] Initialisation du miroir local"
-        git clone --mirror "$AUBEZERO_GITHUB" "$MIRROR_DIR" >/dev/null 2>&1 \
-            && log "[+] Miroir initialisé" \
-            || { log "[−] Échec initialisation miroir"; exit 1; }
+    if [ ! -d "$MIRROR_DIR/.git" ]; then
+        log "~" "Initialisation du miroir local Git..."
+        if git clone --mirror "$AUBEZERO_GITHUB" "$MIRROR_DIR" >/dev/null 2>&1; then
+            log "+" "Miroir initialisé avec succès"
+        else
+            log "[-]" "Échec de l'initialisation du miroir"
+            exit 1
+        fi
     else
-        log "[~] Mise à jour du miroir local"
-        git -C "$MIRROR_DIR" remote update >/dev/null 2>&1 \
-            && log "[+] Miroir mis à jour" \
-            || log "[−] Échec mise à jour miroir"
+        log "~" "Mise à jour du miroir local Git..."
+        if git -C "$MIRROR_DIR" remote update >/dev/null 2>&1; then
+            log "+" "Miroir mis à jour avec succès"
+        else
+            log "[-]" "Échec de la mise à jour du miroir"
+        fi
     fi
 
-    log "[+] Miroir AubeZero prêt pour import Gitea"
+    log "+" "Miroir AubeZero prêt pour import Gitea"
 }
 
 mirror_aubezero
 
-# === Création de la commande gitea === #
-log "[~] Création de la commande gitea"
+# === 8. Génération de la commande CLI /usr/bin/gitea ===
+install_gitea_command() {
+    log "~" "Création de la commande globale /usr/bin/gitea"
 
-GITEA_CMD="/usr/bin/gitea"
+    GITEA_CMD="/usr/bin/gitea"
 
-cat > "$GITEA_CMD" << 'EOF'
-#!/bin/bash
-set -euo pipefail
+    cat << 'EOF' > "$GITEA_CMD"
+#!/bin/sh
+# Cerbere - Gitea CLI Wrapper
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 2026-09-21
+# @Desc : Commandes de gestion pour le service Gitea et ses miroirs
 
-Programme="Cerbere-Gitea"
+set -eu
 
-# === Credentials === #
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
-DEFAULT_GITEA_PATH="/media/Docs01/Gitea"
-DEFAULT_GITEA_PORT="3000"
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
 
-if [[ -f "$CRED_FILE" ]]; then
-    set -a
-    source "$CRED_FILE"
-    set +a
-else
-    PATH_MNEMOSYNE=""
-    PATH_GITEA="$DEFAULT_GITEA_PATH"
-    PORT_GITEA="$DEFAULT_GITEA_PORT"
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
 fi
 
-# === LOG SYSTEM === #
-if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
-    LOG_DIR="$PATH_MNEMOSYNE"
-else
-    LOG_DIR="$DEFAULT_LOG_DIR"
-fi
-
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-CERBERE-GITEA.log"
 
 log() {
-    mkdir -p "$LOG_DIR"
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
 }
+
+DEFAULT_GITEA_PATH="/media/Docs01/Gitea"
+DEFAULT_GITEA_PORT="3000"
 
 GITEA_DIR="${PATH_GITEA:-$DEFAULT_GITEA_PATH}"
 GITEA_PORT="${PORT_GITEA:-$DEFAULT_GITEA_PORT}"
@@ -157,11 +176,11 @@ AUBEZERO_GITHUB="https://github.com/ROYJohan08/AubeZero.git"
 MIRROR_DIR="${GITEA_DIR}/mirror/AubeZero"
 
 create_docker() {
-    log "[~] Recréation du conteneur Gitea"
+    log "~" "Recréation du conteneur Gitea..."
     docker rm -f gitea >/dev/null 2>&1 || true
     docker pull gitea/gitea:latest >/dev/null 2>&1
 
-    docker run -d \
+    if docker run -d \
         --name gitea \
         --restart unless-stopped \
         -p "${GITEA_PORT}:3000" \
@@ -169,48 +188,56 @@ create_docker() {
         -v "${GITEA_DIR}:/data" \
         -v /etc/timezone:/etc/timezone:ro \
         -v /etc/localtime:/etc/localtime:ro \
-        gitea/gitea:latest >/dev/null 2>&1
-
-    log "[+] Conteneur Gitea opérationnel"
-}
-
-mirror_repo() {
-    log "[~] Synchronisation du projet AubeZero → Gitea"
-
-    mkdir -p "$MIRROR_DIR"
-
-    if [[ ! -d "$MIRROR_DIR/.git" ]]; then
-        log "[~] Initialisation du miroir local"
-        git clone --mirror "$AUBEZERO_GITHUB" "$MIRROR_DIR" >/dev/null 2>&1 \
-            && log "[+] Miroir initialisé" \
-            || { log "[−] Échec initialisation miroir"; exit 1; }
+        gitea/gitea:latest >/dev/null 2>&1; then
+        log "+" "Conteneur Gitea recréé et opérationnel"
     else
-        log "[~] Mise à jour du miroir local"
-        git -C "$MIRROR_DIR" remote update >/dev/null 2>&1 \
-            && log "[+] Miroir mis à jour" \
-            || log "[−] Échec mise à jour miroir"
+        log "[-]" "Erreur lors de la recréation du conteneur Gitea"
+        exit 1
     fi
 }
 
-case "$1" in
+mirror_repo() {
+    log "~" "Synchronisation du dépôt AubeZero vers le miroir..."
+
+    mkdir -p "$MIRROR_DIR"
+
+    if [ ! -d "$MIRROR_DIR/.git" ]; then
+        log "~" "Initialisation du miroir local..."
+        if git clone --mirror "$AUBEZERO_GITHUB" "$MIRROR_DIR" >/dev/null 2>&1; then
+            log "+" "Miroir initialisé"
+        else
+            log "[-]" "Échec de l'initialisation du miroir"
+            exit 1
+        fi
+    else
+        log "~" "Mise à jour du miroir local..."
+        if git -C "$MIRROR_DIR" remote update >/dev/null 2>&1; then
+            log "+" "Miroir mis à jour"
+        else
+            log "[-]" "Échec de la mise à jour du miroir"
+        fi
+    fi
+}
+
+case "${1:-none}" in
     start)
-        log "[~] Démarrage Gitea"
-        docker start gitea >/dev/null 2>&1 && log "[+] Gitea démarré"
+        log "~" "Démarrage du service Gitea"
+        docker start gitea >/dev/null 2>&1 && log "+" "Gitea démarré"
         ;;
     stop)
-        log "[~] Arrêt Gitea"
-        docker stop gitea >/dev/null 2>&1 && log "[+] Gitea arrêté"
+        log "~" "Arrêt du service Gitea"
+        docker stop gitea >/dev/null 2>&1 && log "+" "Gitea arrêté"
         ;;
     restart)
-        log "[~] Redémarrage Gitea"
-        docker restart gitea >/dev/null 2>&1 && log "[+] Gitea redémarré"
+        log "~" "Redémarrage du service Gitea"
+        docker restart gitea >/dev/null 2>&1 && log "+" "Gitea redémarré"
         ;;
     update)
-        log "[~] Mise à jour Gitea"
+        log "~" "Mise à jour du service Gitea"
         create_docker
         ;;
     mirror)
-        log "[~] Miroir AubeZero → Gitea"
+        log "~" "Exécution de la synchronisation du miroir AubeZero"
         mirror_repo
         ;;
     *)
@@ -220,7 +247,10 @@ case "$1" in
 esac
 EOF
 
-chmod +x "$GITEA_CMD"
-log "[+] Commande gitea installée : /usr/bin/gitea"
+    chmod +x "$GITEA_CMD"
+    log "+" "Commande gitea installée : $GITEA_CMD"
+}
 
-log "[✓] Module Gitea installé et opérationnel"
+install_gitea_command
+
+log "✓" "Module Cerbere-Gitea installé et opérationnel"
