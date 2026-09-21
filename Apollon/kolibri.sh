@@ -1,212 +1,233 @@
-#!/bin/bash
-# cerbere-kolibri.sh
+#!/bin/sh
+# Cerbere - Kolibri
 # @Author : ROYJohan
 # @Version : 3.0.0
-# @Date : 15/09/2026 13:58
+# @Date : 2026-09-21
 # @Desc : Installation, gestion et synchronisation automatique de Kolibri + Khan Academy FR
 
-set -euo pipefail
+# Stop en cas d'erreur ou de variable non definie
+set -eu
 
-Programme="Cerbere-Kolibri"
+# === 1. Vérification des droits root ===
+if [ "$(id -u)" -ne 0 ]; then
+    echo "[-] Ce script doit être exécuté en tant que root." >&2
+    exit 1
+fi
 
-# === Chargement credentials === #
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+# === 2. Répertoires et configuration Cerbere ===
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
+
+mkdir -p "$CERBERE_DIR"
+
+# Chargement dynamique du fichier credentials.env s'il existe
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
+fi
+
+# Valeurs par défaut
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
 DEFAULT_KOLIBRI_PATH="/media/Docs01/Kolibri"
 DEFAULT_KOLIBRI_PORT="8080"
 
-if [[ -f "$CRED_FILE" ]]; then
-    set -a
-    source "$CRED_FILE"
-    set +a
-else
-    PATH_MNEMOSYNE=""
-    PATH_KOLIBRI="$DEFAULT_KOLIBRI_PATH"
-    PORT_KOLIBRI="$DEFAULT_KOLIBRI_PORT"
-fi
-
-# === LOG SYSTEM === #
-if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
-    LOG_DIR="$PATH_MNEMOSYNE"
-else
-    LOG_DIR="$DEFAULT_LOG_DIR"
-fi
-
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
-
-log() {
-    mkdir -p "$LOG_DIR"
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
-}
-
-log "[👉] Début du module Kolibri"
-
-# === Variables === #
 KOLIBRI_DIR="${PATH_KOLIBRI:-$DEFAULT_KOLIBRI_PATH}"
 KOLIBRI_PORT="${PORT_KOLIBRI:-$DEFAULT_KOLIBRI_PORT}"
 
+# === 3. Initialisation de la journalisation Mnémosyne ===
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-CERBERE-KOLIBRI.log"
+
+log() {
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
+}
+
+log "👉" "Début du module Cerbere-Kolibri"
+
+# Redirection globale de stdout vers le log Mnémosyne (Quiet mode)
+exec 1>>"$LOG_FILE"
+
+# === 4. Préparation du répertoire de travail ===
 mkdir -p "$KOLIBRI_DIR"
 
-# === Dépendances === #
+# === 5. Vérification des dépendances ===
 check_dep() {
-    if command -v "$1" >/dev/null 2>&1; then
-        log "[=] Dépendance OK : $1"
-        return
+    _pkg="$1"
+    if command -v "$_pkg" >/dev/null 2>&1; then
+        log "=" "Dépendance OK : $_pkg"
+        return 0
     fi
 
-    log "[~] Installation dépendance : $1"
-    apt-get update -qq
-    apt-get install -y -qq "$1"
+    log "~" "Installation de la dépendance : $_pkg"
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq >/dev/null 2>&1
+        apt-get install -y -qq "$_pkg" >/dev/null 2>&1
+    else
+        log "[-]" "Gestionnaire de paquets non supporté pour installer $_pkg"
+        exit 1
+    fi
 }
 
 check_dep "docker"
 check_dep "curl"
 check_dep "jq"
 
-# === Fonction : création / recréation du Docker Kolibri === #
+# === 6. Création / Recréation du conteneur Docker Kolibri ===
 create_kolibri_docker() {
-    log "[~] Recréation du conteneur Kolibri"
+    log "~" "Recréation du conteneur Kolibri..."
 
     docker rm -f kolibri >/dev/null 2>&1 || true
     docker pull learningequality/kolibri:latest >/dev/null 2>&1
 
-    docker run -d \
+    if docker run -d \
         --name kolibri \
         --restart unless-stopped \
         -p "${KOLIBRI_PORT}:8080" \
         -v "${KOLIBRI_DIR}:/kolibri" \
-        learningequality/kolibri:latest >/dev/null 2>&1
-
-    log "[+] Conteneur Kolibri opérationnel"
+        learningequality/kolibri:latest >/dev/null 2>&1; then
+        log "+" "Conteneur Kolibri créé et opérationnel"
+    else
+        log "[-]" "Échec lors de la création du conteneur Kolibri"
+        exit 1
+    fi
 }
 
 create_kolibri_docker
 
-# === Fonction : téléchargement automatique de Khan Academy FR === #
+# === 7. Téléchargement automatique de Khan Academy FR ===
 download_khan_fr() {
-    log "[~] Téléchargement Khan Academy FR"
+    log "~" "Vérification et téléchargement de Khan Academy FR..."
 
-    # ID officiel du channel Khan Academy Français
     KHAN_FR_CHANNEL="c6f3f8b1f3e54e0a8e8f6c3d8f1a2b3f"
 
-    # Vérification si déjà présent
-    if docker exec kolibri kolibri manage listchannels | grep -q "$KHAN_FR_CHANNEL"; then
-        log "[=] Khan Academy FR déjà installé"
-        return
+    if docker exec kolibri kolibri manage listchannels 2>/dev/null | grep -q "$KHAN_FR_CHANNEL"; then
+        log "=" "Khan Academy FR est déjà installé"
+        return 0
     fi
 
-    log "[~] Importation du channel FR depuis Kolibri Studio"
+    log "~" "Importation du canal FR depuis Kolibri Studio..."
 
-    docker exec kolibri kolibri manage importchannel \
-        network "$KHAN_FR_CHANNEL" >/dev/null 2>&1 \
-        && log "[+] Channel FR importé" \
-        || log "[−] Échec import channel FR"
+    if docker exec kolibri kolibri manage importchannel network "$KHAN_FR_CHANNEL" >/dev/null 2>&1; then
+        log "+" "Canal FR importé avec succès"
+    else
+        log "[-]" "Échec de l'importation du canal FR"
+        return 1
+    fi
 
-    log "[~] Téléchargement du contenu FR"
+    log "~" "Téléchargement du contenu FR..."
 
-    docker exec kolibri kolibri manage importcontent \
-        network "$KHAN_FR_CHANNEL" >/dev/null 2>&1 \
-        && log "[+] Contenu FR téléchargé" \
-        || log "[−] Échec téléchargement contenu FR"
+    if docker exec kolibri kolibri manage importcontent network "$KHAN_FR_CHANNEL" >/dev/null 2>&1; then
+        log "+" "Contenu FR téléchargé avec succès"
+    else
+        log "[-]" "Échec du téléchargement du contenu FR"
+        return 1
+    fi
 }
 
-download_khan_fr
+download_khan_fr || true
 
-# === Création de la commande kolibri === #
-log "[~] Création de la commande kolibri"
+# === 8. Génération de la commande CLI /usr/bin/kolibri ===
+install_kolibri_command() {
+    log "~" "Création de la commande globale /usr/bin/kolibri"
 
-KOLIBRI_CMD="/usr/bin/kolibri"
+    KOLIBRI_CMD="/usr/bin/kolibri"
 
-cat > "$KOLIBRI_CMD" << 'EOF'
-#!/bin/bash
-set -euo pipefail
+    cat << 'EOF' > "$KOLIBRI_CMD"
+#!/bin/sh
+# Cerbere - Kolibri CLI Wrapper
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 2026-09-21
+# @Desc : Commandes de gestion du service et contenu Kolibri
 
-Programme="Cerbere-Kolibri"
+set -eu
 
-# === Credentials === #
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
-DEFAULT_KOLIBRI_PATH="/media/Docs01/Kolibri"
-DEFAULT_KOLIBRI_PORT="8080"
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
 
-if [[ -f "$CRED_FILE" ]]; then
-    set -a
-    source "$CRED_FILE"
-    set +a
-else
-    PATH_MNEMOSYNE=""
-    PATH_KOLIBRI="$DEFAULT_KOLIBRI_PATH"
-    PORT_KOLIBRI="$DEFAULT_KOLIBRI_PORT"
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
 fi
 
-# === LOG SYSTEM === #
-if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
-    LOG_DIR="$PATH_MNEMOSYNE"
-else
-    LOG_DIR="$DEFAULT_LOG_DIR"
-fi
-
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-CERBERE-KOLIBRI.log"
 
 log() {
-    mkdir -p "$LOG_DIR"
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
 }
+
+DEFAULT_KOLIBRI_PATH="/media/Docs01/Kolibri"
+DEFAULT_KOLIBRI_PORT="8080"
 
 KOLIBRI_DIR="${PATH_KOLIBRI:-$DEFAULT_KOLIBRI_PATH}"
 KOLIBRI_PORT="${PORT_KOLIBRI:-$DEFAULT_KOLIBRI_PORT}"
 
 create_docker() {
-    log "[~] Recréation du conteneur Kolibri"
+    log "~" "Recréation du conteneur Kolibri..."
     docker rm -f kolibri >/dev/null 2>&1 || true
     docker pull learningequality/kolibri:latest >/dev/null 2>&1
 
-    docker run -d \
+    if docker run -d \
         --name kolibri \
         --restart unless-stopped \
         -p "${KOLIBRI_PORT}:8080" \
         -v "${KOLIBRI_DIR}:/kolibri" \
-        learningequality/kolibri:latest >/dev/null 2>&1
-
-    log "[+] Conteneur Kolibri opérationnel"
+        learningequality/kolibri:latest >/dev/null 2>&1; then
+        log "+" "Conteneur Kolibri recréé et opérationnel"
+    else
+        log "[-]" "Échec de la recréation du conteneur Kolibri"
+        exit 1
+    fi
 }
 
 download_khan_fr() {
-    log "[~] Téléchargement Khan Academy FR"
+    log "~" "Téléchargement / Mise à jour Khan Academy FR..."
 
     KHAN_FR_CHANNEL="c6f3f8b1f3e54e0a8e8f6c3d8f1a2b3f"
 
-    if docker exec kolibri kolibri manage listchannels | grep -q "$KHAN_FR_CHANNEL"; then
-        log "[=] Khan Academy FR déjà installé"
-        return
+    if docker exec kolibri kolibri manage listchannels 2>/dev/null | grep -q "$KHAN_FR_CHANNEL"; then
+        log "=" "Khan Academy FR est déjà présent"
+        return 0
     fi
 
-    docker exec kolibri kolibri manage importchannel network "$KHAN_FR_CHANNEL" >/dev/null 2>&1 \
-        && log "[+] Channel FR importé"
+    if docker exec kolibri kolibri manage importchannel network "$KHAN_FR_CHANNEL" >/dev/null 2>&1; then
+        log "+" "Canal FR importé avec succès"
+    fi
 
-    docker exec kolibri kolibri manage importcontent network "$KHAN_FR_CHANNEL" >/dev/null 2>&1 \
-        && log "[+] Contenu FR téléchargé"
+    if docker exec kolibri kolibri manage importcontent network "$KHAN_FR_CHANNEL" >/dev/null 2>&1; then
+        log "+" "Contenu FR téléchargé avec succès"
+    fi
 }
 
-case "$1" in
+case "${1:-none}" in
     start)
-        log "[~] Démarrage Kolibri"
-        docker start kolibri >/dev/null 2>&1 && log "[+] Kolibri démarré"
+        log "~" "Démarrage du service Kolibri"
+        docker start kolibri >/dev/null 2>&1 && log "+" "Kolibri démarré"
         ;;
     stop)
-        log "[~] Arrêt Kolibri"
-        docker stop kolibri >/dev/null 2>&1 && log "[+] Kolibri arrêté"
+        log "~" "Arrêt du service Kolibri"
+        docker stop kolibri >/dev/null 2>&1 && log "+" "Kolibri arrêté"
         ;;
     restart)
-        log "[~] Redémarrage Kolibri"
-        docker restart kolibri >/dev/null 2>&1 && log "[+] Kolibri redémarré"
+        log "~" "Redémarrage du service Kolibri"
+        docker restart kolibri >/dev/null 2>&1 && log "+" "Kolibri redémarré"
         ;;
     update)
-        log "[~] Mise à jour Kolibri"
+        log "~" "Mise à jour du service Kolibri"
         create_docker
         ;;
     khan)
-        log "[~] Mise à jour Khan Academy FR"
+        log "~" "Synchronisation Khan Academy FR"
         download_khan_fr
         ;;
     *)
@@ -216,7 +237,10 @@ case "$1" in
 esac
 EOF
 
-chmod +x "$KOLIBRI_CMD"
-log "[+] Commande kolibri installée : /usr/bin/kolibri"
+    chmod +x "$KOLIBRI_CMD"
+    log "+" "Commande kolibri installée : $KOLIBRI_CMD"
+}
 
-log "[✓] Module Kolibri installé et opérationnel"
+install_kolibri_command
+
+log "✓" "Module Cerbere-Kolibri installé et opérationnel"
