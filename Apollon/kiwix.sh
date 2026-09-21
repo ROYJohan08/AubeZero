@@ -1,194 +1,218 @@
-#!/bin/bash
-# apollon-kiwix.sh
+#!/bin/sh
+# Apollon - Kiwix
 # @Author : ROYJohan
 # @Version : 3.0.0
-# @Date : 15/09/2026 13:51
+# @Date : 2026-09-21
 # @Desc : Installation, mise à jour et gestion du serveur Kiwix pour AubeZero
 
-set -euo pipefail
+# Stop en cas d'erreur ou de variable non definie
+set -eu
 
-Programme="Apollon-Kiwix"
+# === 1. Vérification des droits root ===
+if [ "$(id -u)" -ne 0 ]; then
+    echo "[-] Ce script doit être exécuté en tant que root." >&2
+    exit 1
+fi
 
-# === Chargement credentials === #
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+# === 2. Répertoires et configuration Cerbere ===
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
+
+mkdir -p "$CERBERE_DIR"
+
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
+fi
+
+# Valeurs par défaut
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
 DEFAULT_DOCS01="/media/Docs01"
-DEFAULT_CERBERE="/etc/AubeZero/Cerbere"
+DEFAULT_CERBERE="$CERBERE_DIR"
 
-if [[ -f "$CRED_FILE" ]]; then
-    set -a
-    source "$CRED_FILE"
-    set +a
-else
-    PATH_MNEMOSYNE=""
-    PATH_DOCS01="$DEFAULT_DOCS01"
-    PATH_CERBERE="$DEFAULT_CERBERE"
-    PORT_KIWIX="8080"
-    PATH_KIWIX="/media/Docs01/Kiwix"
-fi
+PATH_DOCS01="${PATH_DOCS01:-$DEFAULT_DOCS01}"
+PATH_CERBERE="${PATH_CERBERE:-$DEFAULT_CERBERE}"
+KIWIX_PORT="${PORT_KIWIX:-8080}"
+KIWIX_DIR="${PATH_KIWIX:-/media/Docs01/Kiwix}"
+PATH_LAMP="${PATH_LAMP:-/var/www/html}"
 
-# === LOG SYSTEM === #
-if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
-    LOG_DIR="$PATH_MNEMOSYNE"
-else
-    LOG_DIR="$DEFAULT_LOG_DIR"
-fi
-
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+# === 3. Initialisation de la journalisation Mnémosyne ===
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-APOLLON-KIWIX.log"
 
 log() {
-    mkdir -p "$LOG_DIR"
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
 }
 
-log "[👉] Début du module Kiwix"
+log "👉" "Début du module Apollon-Kiwix"
 
-# === Variables === #
+# Redirection globale de stdout vers le log Mnémosyne (Quiet mode)
+exec 1>>"$LOG_FILE"
+
+# === 4. Variables de travail ===
 JSON_URL="https://raw.githubusercontent.com/ROYJohan08/AubeZero/main/Apollon/kiwix.json"
 LOCAL_JSON="${PATH_CERBERE}/Apollon/kiwix.json"
 TMP_JSON="/tmp/kiwix.json"
-KIWIX_DIR="${PATH_KIWIX}"
-KIWIX_PORT="${PORT_KIWIX}"
 
 mkdir -p "$KIWIX_DIR"
 mkdir -p "$(dirname "$LOCAL_JSON")"
 
-# === Dépendances === #
+# === 5. Vérification des dépendances ===
 check_dep() {
-    if command -v "$1" >/dev/null 2>&1; then
-        log "[=] Dépendance OK : $1"
-        return
+    _pkg="$1"
+    if command -v "$_pkg" >/dev/null 2>&1; then
+        log "=" "Dépendance OK : $_pkg"
+        return 0
     fi
 
-    log "[~] Installation dépendance : $1"
-    apt-get update -qq
-    apt-get install -y -qq "$1"
+    log "~" "Installation de la dépendance : $_pkg"
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq >/dev/null 2>&1
+        apt-get install -y -qq "$_pkg" >/dev/null 2>&1
+    else
+        log "[-]" "Gestionnaire de paquets non supporté pour installer $_pkg"
+        exit 1
+    fi
 }
 
 check_dep "curl"
 check_dep "jq"
 check_dep "docker"
+check_dep "rsync"
 
-# === Téléchargement JSON (avec fallback local) === #
-log "[~] Téléchargement de kiwix.json"
+# === 6. Téléchargement du fichier kiwix.json ===
+log "~" "Téléchargement de kiwix.json..."
 
 if curl -sSL -f "$JSON_URL" -o "$TMP_JSON"; then
-    log "[+] kiwix.json téléchargé"
+    log "+" "kiwix.json téléchargé avec succès"
     cp "$TMP_JSON" "$LOCAL_JSON"
 else
-    log "[−] Échec téléchargement kiwix.json — fallback local"
-    if [[ ! -f "$LOCAL_JSON" ]]; then
-        log "[−] Aucun JSON local disponible — arrêt"
+    log "[-]" "Échec du téléchargement de kiwix.json — Bascule sur la version locale"
+    if [ ! -f "$LOCAL_JSON" ]; then
+        log "[-]" "Aucun fichier kiwix.json local disponible — Arrêt du processus"
         exit 1
     fi
     cp "$LOCAL_JSON" "$TMP_JSON"
 fi
 
-# === Téléchargement des fichiers ZIM === #
-log "[~] Téléchargement des fichiers ZIM"
+# === 7. Téléchargement des fichiers ZIM ===
+log "~" "Téléchargement des fichiers ZIM..."
 
 RSYNC_HOST="rsync://download.kiwix.org/zim/builds"
 
 jq -r '.[]' "$TMP_JSON" | while read -r zim; do
-    log "[~] Téléchargement : $zim"
-    rsync -avP "$RSYNC_HOST/$zim" "$KIWIX_DIR/" >/dev/null 2>&1 \
-        && log "[+] OK : $zim" \
-        || log "[−] FAIL : $zim"
+    if [ -n "$zim" ]; then
+        log "~" "Téléchargement ZIM : $zim"
+        if rsync -avP "$RSYNC_HOST/$zim" "$KIWIX_DIR/" >/dev/null 2>&1; then
+            log "+" "Téléchargement réussi : $zim"
+        else
+            log "[-]" "Échec du téléchargement : $zim"
+        fi
+    fi
 done
 
-log "[+] Téléchargements ZIM terminés"
+log "+" "Téléchargements des fichiers ZIM terminés"
 
-# === Création / Recréation du Docker Kiwix === #
+# === 8. Création / Recréation du conteneur Kiwix ===
 create_kiwix_docker() {
-    log "[~] Recréation du conteneur Kiwix"
+    log "~" "Recréation du conteneur Docker Kiwix..."
 
     docker rm -f kiwix >/dev/null 2>&1 || true
     docker pull ghcr.io/kiwix/kiwix-serve:latest >/dev/null 2>&1
 
-    docker run -d \
+    if docker run -d \
         --name kiwix \
         --restart unless-stopped \
         -p "${KIWIX_PORT}:8080" \
         -v "${KIWIX_DIR}:/data" \
         ghcr.io/kiwix/kiwix-serve:latest \
-        /data/*.zim >/dev/null 2>&1
-
-    log "[+] Conteneur Kiwix opérationnel"
+        /data/*.zim >/dev/null 2>&1; then
+        log "+" "Conteneur Kiwix créé et opérationnel"
+    else
+        log "[-]" "Échec lors de la création du conteneur Kiwix"
+        exit 1
+    fi
 }
 
 create_kiwix_docker
 
-# === Création de la commande kiwix === #
-log "[~] Création de la commande kiwix"
+# === 9. Génération de la commande CLI /usr/bin/kiwix ===
+install_kiwix_command() {
+    log "~" "Création de la commande globale /usr/bin/kiwix"
 
-KIWIX_CMD="/usr/bin/kiwix"
+    KIWIX_CMD="/usr/bin/kiwix"
 
-cat > "$KIWIX_CMD" << 'EOF'
-#!/bin/bash
-set -euo pipefail
+    cat << 'EOF' > "$KIWIX_CMD"
+#!/bin/sh
+# Apollon - Kiwix CLI Wrapper
+# @Author : ROYJohan
+# @Version : 3.0.0
+# @Date : 2026-09-21
+# @Desc : Commandes de gestion du serveur Kiwix
 
-Programme="Apollon-Kiwix"
+set -eu
 
-# === Credentials === #
-CRED_FILE="/etc/AubeZero/Cerbere/Credentials.env"
-DEFAULT_LOG_DIR="/etc/AubeZero/Mnemosyne"
+BASE_DIR="/etc/AubeZero"
+CERBERE_DIR="$BASE_DIR/Cerbere"
+CREDENTIALS_FILE="$CERBERE_DIR/credentials.env"
 
-if [[ -f "$CRED_FILE" ]]; then
-    set -a
-    source "$CRED_FILE"
-    set +a
-else
-    PATH_MNEMOSYNE=""
+if [ -f "$CREDENTIALS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CREDENTIALS_FILE"
 fi
 
-# === LOG SYSTEM === #
-if [[ -n "${PATH_MNEMOSYNE:-}" ]]; then
-    LOG_DIR="$PATH_MNEMOSYNE"
-else
-    LOG_DIR="$DEFAULT_LOG_DIR"
-fi
-
-LOG_FILE="${LOG_DIR}/$(date +%Y-%m).log"
+PATH_MNEMOSYNE="${PATH_MNEMOSYNE:-/etc/AubeZero/Mnemosyne}"
+mkdir -p "$PATH_MNEMOSYNE"
+DATE_LOG=$(date +'%Y%m%d')
+LOG_FILE="$PATH_MNEMOSYNE/${DATE_LOG}-APOLLON-KIWIX.log"
 
 log() {
-    mkdir -p "$LOG_DIR"
-    echo "$(date +'%Y%m%d%H%M')-${Programme}-$1" >> "$LOG_FILE"
+    _tag="$1"
+    _msg="$2"
+    echo "[$_tag] - $(date +'%Y-%m-%d %H:%M:%S') - $_msg" >> "$LOG_FILE"
 }
 
 KIWIX_DIR="${PATH_KIWIX:-/media/Docs01/Kiwix}"
 KIWIX_PORT="${PORT_KIWIX:-8080}"
 
 create_docker() {
-    log "[~] Recréation du conteneur Kiwix"
+    log "~" "Recréation du conteneur Kiwix..."
     docker rm -f kiwix >/dev/null 2>&1 || true
     docker pull ghcr.io/kiwix/kiwix-serve:latest >/dev/null 2>&1
 
-    docker run -d \
+    if docker run -d \
         --name kiwix \
         --restart unless-stopped \
         -p "${KIWIX_PORT}:8080" \
         -v "${KIWIX_DIR}:/data" \
         ghcr.io/kiwix/kiwix-serve:latest \
-        /data/*.zim >/dev/null 2>&1
-
-    log "[+] Conteneur Kiwix opérationnel"
+        /data/*.zim >/dev/null 2>&1; then
+        log "+" "Conteneur Kiwix recréé et opérationnel"
+    else
+        log "[-]" "Échec lors de la recréation du conteneur Kiwix"
+        exit 1
+    fi
 }
 
-case "$1" in
+case "${1:-none}" in
     start)
-        log "[~] Démarrage Kiwix"
-        docker start kiwix >/dev/null 2>&1 && log "[+] Kiwix démarré"
+        log "~" "Démarrage du service Kiwix"
+        docker start kiwix >/dev/null 2>&1 && log "+" "Kiwix démarré"
         ;;
     stop)
-        log "[~] Arrêt Kiwix"
-        docker stop kiwix >/dev/null 2>&1 && log "[+] Kiwix arrêté"
+        log "~" "Arrêt du service Kiwix"
+        docker stop kiwix >/dev/null 2>&1 && log "+" "Kiwix arrêté"
         ;;
     restart)
-        log "[~] Redémarrage Kiwix"
-        docker restart kiwix >/dev/null 2>&1 && log "[+] Kiwix redémarré"
+        log "~" "Redémarrage du service Kiwix"
+        docker restart kiwix >/dev/null 2>&1 && log "+" "Kiwix redémarré"
         ;;
     update)
-        log "[~] Mise à jour Kiwix"
+        log "~" "Mise à jour du service Kiwix"
         create_docker
         ;;
     *)
@@ -198,11 +222,14 @@ case "$1" in
 esac
 EOF
 
-chmod +x "$KIWIX_CMD"
-log "[+] Commande kiwix installée : /usr/bin/kiwix"
+    chmod +x "$KIWIX_CMD"
+    log "+" "Commande kiwix installée : $KIWIX_CMD"
+}
 
-# === Mise à jour du gestionnaire ZIM (kiwix.php) === #
-log "[~] Vérification du gestionnaire ZIM kiwix.php"
+install_kiwix_command
+
+# === 10. Mise à jour du gestionnaire ZIM (kiwix.php) ===
+log "~" "Vérification du gestionnaire ZIM kiwix.php"
 
 REMOTE_KIWIX_PHP="https://raw.githubusercontent.com/ROYJohan08/AubeZero/refs/heads/main/Apollon/kiwix.php"
 LOCAL_KIWIX_PHP="${PATH_LAMP}/kiwix.php"
@@ -210,36 +237,35 @@ TMP_KIWIX_PHP="/tmp/kiwix.php"
 
 mkdir -p "$(dirname "$LOCAL_KIWIX_PHP")"
 
-# Téléchargement temporaire
 if curl -sSL -f "$REMOTE_KIWIX_PHP" -o "$TMP_KIWIX_PHP"; then
-    log "[+] kiwix.php téléchargé temporairement"
+    log "+" "kiwix.php téléchargé temporairement"
 else
-    log "[−] Impossible de télécharger kiwix.php — abandon de la mise à jour"
+    log "[-]" "Impossible de télécharger kiwix.php — Abandon de la mise à jour PHP"
     rm -f "$TMP_KIWIX_PHP"
+    log "✓" "Module Apollon-Kiwix partiellement installé (sans la partie web PHP)"
     exit 0
 fi
 
-# Si le fichier local n'existe pas → installation directe
-if [[ ! -f "$LOCAL_KIWIX_PHP" ]]; then
+if [ ! -f "$LOCAL_KIWIX_PHP" ]; then
     cp "$TMP_KIWIX_PHP" "$LOCAL_KIWIX_PHP"
     chmod 644 "$LOCAL_KIWIX_PHP"
-    log "[+] kiwix.php installé (nouvelle installation)"
+    log "+" "kiwix.php installé avec succès"
     rm -f "$TMP_KIWIX_PHP"
+    log "✓" "Module Apollon-Kiwix installé et opérationnel"
     exit 0
 fi
 
-# Comparaison des versions (hash)
 LOCAL_HASH=$(sha256sum "$LOCAL_KIWIX_PHP" | awk '{print $1}')
 REMOTE_HASH=$(sha256sum "$TMP_KIWIX_PHP" | awk '{print $1}')
 
-if [[ "$LOCAL_HASH" != "$REMOTE_HASH" ]]; then
+if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
     cp "$TMP_KIWIX_PHP" "$LOCAL_KIWIX_PHP"
     chmod 644 "$LOCAL_KIWIX_PHP"
-    log "[+] kiwix.php mis à jour (version distante plus récente)"
+    log "+" "kiwix.php mis à jour vers la version distante"
 else
-    log "[=] kiwix.php déjà à jour"
+    log "=" "kiwix.php est déjà à jour"
 fi
 
 rm -f "$TMP_KIWIX_PHP"
 
-log "[✓] Module Kiwix installé et opérationnel"
+log "✓" "Module Apollon-Kiwix installé et opérationnel"
