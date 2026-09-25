@@ -2,7 +2,10 @@
 session_start();
 
 // --- CHARGEMENT DE LA CONFIGURATION ---
-$envFile = __DIR__ . '/credentials.env';$config  = file_exists($envFile) ? parse_ini_file($envFile) : [];
+$envFile = '/etc/AubeZero/Cerbere/credentials.env';
+if (!file_exists($envFile)) {$envFile = __DIR__ . '/credentials.env';
+}
+$config = file_exists($envFile) ? parse_ini_file($envFile) : [];
 
 $stateFilePath      = '/home/lelabdurhg/api/scenarios_state.json';$protocolesDataFile = '/home/lelabdurhg/api/protocoles_data.json';
 
@@ -112,65 +115,341 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocoles d'Extraction</title>
+    <title>AubeZero // Protocoles d'Extraction</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 20px; }
-        .container { max-width: 1000px; margin: 0 auto; }
-        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; }
-        h1 { margin: 0; font-size: 1.8rem; color: #fff; }
-        .btn { padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 0.9rem; font-weight: bold; cursor: pointer; border: none; }
-        .btn-json { background-color: #17a2b8; color: #fff; }
-        .btn-submit { background-color: #007bff; color: #fff; padding: 10px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
-        .btn-submit:hover { background-color: #0056b3; }
-        .section { background: #1e1e1e; padding: 20px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #2d2d2d; }
-        
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 15px; }
-        .card { background: #252525; padding: 20px; border-radius: 6px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; border-left: 6px solid #007bff; }
-        .card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-        .card h3 { margin-top: 0; font-size: 1.2rem; }
-        .card-click-hint { font-size: 0.8rem; color: #888; margin-top: 15px; text-transform: uppercase; letter-spacing: 1px; }
+        :root {
+            --bg-primary: #050b14;
+            --bg-card: #0a1728;
+            --border-color: #00e5ff;
+            --border-dim: #0056b3;
+            --text-main: #d0f0ff;
+            --text-bright: #00e5ff;
+            --toast-red: #ff3333;
+            --success-green: #00ff66;
+            --warning-amber: #ffc107;
+        }
 
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); justify-content: center; align-items: center; z-index: 1000; }
-        .modal-overlay.active { display: flex; }
-        .modal-card { background: #222; border-radius: 8px; width: 90%; max-width: 650px; padding: 25px; position: relative; border: 1px solid #444; max-height: 85vh; overflow-y: auto; }
-        .modal-close { position: absolute; top: 15px; right: 15px; background: none; border: none; color: #aaa; font-size: 1.5rem; cursor: pointer; }
-        .modal-close:hover { color: #fff; }
-        .markdown-body { background: #1a1a1a; padding: 15px; border-radius: 6px; border: 1px solid #333; margin: 15px 0; line-height: 1.5; }
-        
-        .gps-step-box { background: #181818; padding: 15px; border-radius: 6px; border: 1px solid #333; margin-top: 15px; }
-        .password-form { display: flex; gap: 10px; margin: 10px 0; }
-        .input-key { flex: 1; padding: 10px; background: #2b2b2b; border: 1px solid #444; color: #fff; border-radius: 4px; box-sizing: border-box; }
-        .btn-check { width: 100%; padding: 12px; background: #28a745; border: none; color: #fff; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
-        .status-msg { margin-top: 10px; font-weight: bold; }
+        * {
+            box-sizing: border-box;
+            font-family: 'Consolas', 'Courier New', monospace;
+        }
 
-        .client-debug-box { background: #000; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; margin-top: 15px; font-family: monospace; font-size: 0.85rem; color: #ffc107; max-height: 150px; overflow-y: auto; }
-        .client-debug-title { font-weight: bold; border-bottom: 1px dashed #ffc107; padding-bottom: 4px; margin-bottom: 6px; }
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(0, 229, 255, 0.05) 0%, transparent 80%),
+                linear-gradient(rgba(0, 229, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 229, 255, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 20px 20px, 20px 20px;
+        }
 
-        .debug-console { background: #0a0a0a; border-left: 4px solid #ffc107; margin-top: 20px; }
-        .debug-console h3 { color: #ffc107; margin-top: 0; }
-        .debug-log { color: #aaa; margin: 5px 0; font-family: monospace; white-space: pre-wrap; word-break: break-all; }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-dim);
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--text-bright);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h1::before {
+            content: "►";
+            font-size: 1rem;
+            color: var(--border-color);
+        }
+
+        .btn-hud {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-bright);
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-block;
+            font-size: 0.85rem;
+        }
+
+        .btn-hud:hover {
+            background: var(--border-color);
+            color: #000;
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+        }
+
+        .section {
+            background: var(--bg-card);
+            padding: 25px;
+            border: 1px solid var(--border-dim);
+            position: relative;
+            clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+        }
+
+        .section-title {
+            margin-top: 0;
+            color: var(--text-bright);
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border-bottom: 1px dashed var(--border-dim);
+            padding-bottom: 8px;
+            margin-bottom: 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: rgba(0, 20, 40, 0.6);
+            border: 1px solid var(--border-dim);
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .card:hover {
+            border-color: var(--border-color);
+            box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .card h3 {
+            margin-top: 0;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .card-click-hint {
+            font-size: 0.75rem;
+            color: var(--text-bright);
+            margin-top: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* --- FENÊTRES MODALES --- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 6, 12, 0.85);
+            backdrop-filter: blur(5px);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 0 25px rgba(0, 229, 255, 0.25);
+            width: 90%;
+            max-width: 700px;
+            padding: 25px;
+            position: relative;
+            max-height: 85vh;
+            overflow-y: auto;
+            clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: transparent;
+            border: 1px solid var(--toast-red);
+            color: var(--toast-red);
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .modal-close:hover {
+            background: var(--toast-red);
+            color: #fff;
+        }
+
+        .markdown-body {
+            background: rgba(0, 10, 20, 0.8);
+            padding: 15px;
+            border: 1px solid var(--border-dim);
+            margin: 15px 0;
+            line-height: 1.5;
+            font-size: 0.9rem;
+        }
+
+        .gps-step-box {
+            background: rgba(0, 15, 30, 0.9);
+            padding: 15px;
+            border: 1px solid var(--border-dim);
+            margin-top: 15px;
+        }
+
+        .password-form {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .input-key {
+            flex: 1;
+            padding: 10px;
+            background: rgba(0, 20, 40, 0.8);
+            border: 1px solid var(--border-dim);
+            color: #fff;
+            outline: none;
+            font-size: 0.9rem;
+        }
+
+        .input-key:focus {
+            border-color: var(--border-color);
+        }
+
+        /* --- TOASTS DISCORD --- */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast-discord {
+            background: #18191c;
+            border-left: 4px solid var(--toast-red);
+            color: #dcddde;
+            padding: 12px 18px;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 280px;
+            animation: slideIn 0.3s ease-out;
+            font-size: 0.85rem;
+        }
+
+        .toast-discord.warning {
+            border-left-color: var(--warning-amber);
+        }
+
+        .toast-discord.success {
+            border-left-color: var(--success-green);
+        }
+
+        .toast-discord .toast-title {
+            color: #ffffff;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Console Debug HUD */
+        .client-debug-box {
+            background: #02060c;
+            border: 1px solid var(--border-dim);
+            padding: 10px;
+            margin-top: 15px;
+            font-size: 0.8rem;
+            color: var(--text-bright);
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .client-debug-title {
+            font-weight: bold;
+            border-bottom: 1px dashed var(--border-dim);
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+            color: var(--warning-amber);
+        }
+
+        .debug-console {
+            background: #02060c;
+            border: 1px solid var(--warning-amber);
+            margin-top: 20px;
+            padding: 15px;
+        }
+
+        .debug-console h3 {
+            color: var(--warning-amber);
+            margin-top: 0;
+            font-size: 0.95rem;
+        }
+
+        .debug-log {
+            color: #aaa;
+            margin: 4px 0;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
+
+    <div class="toast-container" id="toastContainer"></div>
+
     <div class="container">
         <header>
-            <h1>Protocoles d'Extraction</h1>
+            <h1>MODULE // PROTOCOLES D'EXTRACTION</h1>
             <div>
-                <a href="?format=json" target="_blank" class="btn btn-json">Export JSON</a>
+                <a href="?format=json" target="_blank" class="btn-hud">Export JSON</a>
             </div>
         </header>
 
         <div class="section">
-            <h2>Protocoles Activés (<?= count($activeProtocoles) ?>) :</h2>
+            <div class="section-title">Protocoles Activés (<?= count($activeProtocoles) ?>)</div>
             <?php if (empty($activeProtocoles)): ?>
-                <p>Aucun protocole n'est actuellement activé.</p>
+                <p style="color: #888;">Aucun protocole d'extraction n'est actuellement actif sur le réseau.</p>
             <?php else: ?>
                 <div class="grid">
                     <?php foreach ($activeProtocoles as $code =>$proto): ?>
-                        <div class="card" style="border-left-color: <?= htmlspecialchars($proto['couleur'] ?? '#007bff') ?>;" onclick="openProtocolModal('<?= htmlspecialchars($code) ?>')">
-                            <h3 style="color: <?= htmlspecialchars($proto['couleur'] ?? '#007bff') ?>;">[<?= htmlspecialchars($code) ?>] <?= htmlspecialchars($proto['nom'] ?? 'Sans Nom') ?></h3>
-                            <p>Cliquez pour consulter le protocole et déchiffrer l'itinéraire GPS.</p>
-                            <div class="card-click-hint">Ouvrir le protocole &rarr;</div>
+                        <div class="card" style="border-left: 4px solid <?= htmlspecialchars($proto['couleur'] ?? '#00e5ff') ?>;" onclick="openProtocolModal('<?= htmlspecialchars($code) ?>')">
+                            <h3 style="color: <?= htmlspecialchars($proto['couleur'] ?? '#00e5ff') ?>;">[<?= htmlspecialchars($code) ?>] <?= htmlspecialchars($proto['nom'] ?? 'Sans Nom') ?></h3>
+                            <p style="font-size: 0.85rem; color: #aaa;">Sélectionner pour initialiser le déchiffrement et le guidage d'itinéraire.</p>
+                            <div class="card-click-hint">ACCÉDER AU PROTOCOLE <span>►</span></div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -178,8 +457,8 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
         </div>
 
         <?php if (isset($_GET['debug'])): ?>
-        <div class="section debug-console">
-            <h3>Console de débogage PHP (protocoles.php)</h3>
+        <div class="debug-console">
+            <h3>CONSOLE DE DÉBOGAGE SERVEUR (protocoles.php)</h3>
             <?php foreach ($debugLogs as $index =>$log): ?>
                 <div class="debug-log">[<?= $index ?>] > <?= htmlspecialchars($log) ?></div>
             <?php endforeach; ?>
@@ -187,34 +466,32 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
         <?php endif; ?>
     </div>
 
-    <!-- Modale de détails -->
+    <!-- MODALE TACTIQUE DE PROTOCOLE -->
     <div id="protocolModal" class="modal-overlay">
         <div class="modal-card">
-            <button class="modal-close" onclick="closeProtocolModal()">&times;</button>
-            <h2 id="modalTitle">Titre du protocole</h2>
+            <button class="modal-close" onclick="closeProtocolModal()">[X] FERMER</button>
+            <h2 id="modalTitle" style="margin-top:0; font-size: 1.2rem; text-transform: uppercase;">Titre du protocole</h2>
             
             <div class="markdown-body" id="modalMarkdown"></div>
 
-            <!-- Module GPS Pas à Pas -->
+            <!-- MODULE GPS PAS À PAS -->
             <div class="gps-step-box">
-                <h4>Séquence de Navigation GPS</h4>
-                <label for="clientPassword">Mot de passe de déchiffrement client :</label>
+                <h4 style="margin-top:0; color: var(--text-bright); text-transform: uppercase; font-size: 0.9rem;">Séquence de Navigation GPS</h4>
+                <label for="clientPassword" style="font-size: 0.8rem; color: #aaa;">Clé Client de Déchiffrement :</label>
                 <div class="password-form">
-                    <input type="password" id="clientPassword" class="input-key" placeholder="Entrez la clé client..." oninput="updateGpsUI()" onkeydown="handleKeyPress(event)">
-                    <button type="button" class="btn-submit" onclick="updateGpsUI()">Déchiffrer</button>
+                    <input type="password" id="clientPassword" class="input-key" placeholder="Saisir la clé tactique..." onkeydown="handleKeyPress(event)">
+                    <button type="button" class="btn-hud" onclick="updateGpsUI()">Déchiffrer</button>
                 </div>
                 
-                <div id="gpsStepInfo">Veuillez saisir votre mot de passe pour afficher les points GPS.</div>
-                <div id="gpsStatus" class="status-msg"></div>
+                <div id="gpsStepInfo" style="font-size: 0.85rem; margin-top: 10px;">Saisissez votre clé pour débloquer les coordonnées.</div>
                 
-                <!-- Bloc de debug en temps réel -->
                 <div class="client-debug-box">
-                    <div class="client-debug-title">&gt;_ Console de déchiffrement Temps Réel</div>
-                    <div id="clientDebugLog">Attente d'une saisie de clé...</div>
+                    <div class="client-debug-title">&gt;_ Tracé de Déchiffrement Temps Réel</div>
+                    <div id="clientDebugLog">Attente d'une clé d'accès...</div>
                 </div>
 
-                <button id="btnCheckGps" class="btn-check" style="display:none;" onclick="checkUserLocation()">Démarrer le suivi GPS en temps réel</button>
-                <div id="mapsLinkBox" style="margin-top: 15px;"></div>
+                <button id="btnCheckGps" class="btn-hud" style="display:none; width: 100%; margin-top: 15px;" onclick="checkUserLocation()">Démarrer le suivi GPS en temps réel</button>
+                <div id="mapsLinkBox" style="margin-top: 12px; font-size: 0.85rem;"></div>
             </div>
         </div>
     </div>
@@ -226,11 +503,23 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
         let decryptedCoords = null;
         let geoWatchId = null;
 
+        function showToast(message, title = "Alerte Système", type = "error") {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast-discord ${type}`;
+            toast.innerHTML = `
+                <div>
+                    <div class="toast-title">${title}</div>
+                    <div>${message}</div>
+                </div>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
         function logClientDebug(message, clear = false) {
             const container = document.getElementById('clientDebugLog');
-            if (clear && container) {
-                container.innerHTML = '';
-            }
+            if (clear && container) container.innerHTML = '';
             if (container) {
                 const time = new Date().toLocaleTimeString();
                 container.innerHTML += `<div>[${time}] ${message}</div>`;
@@ -247,11 +536,11 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
             if (!proto) return;
 
             document.getElementById('modalTitle').innerText = '[' + code + '] ' + (proto.nom || '');
-            document.getElementById('modalTitle').style.color = proto.couleur || '#ffffff';
+            document.getElementById('modalTitle').style.color = proto.couleur || '#00e5ff';
             document.getElementById('modalMarkdown').innerHTML = proto.description_html || '';
 
             document.getElementById('clientPassword').value = '';
-            logClientDebug("Modal ouverte pour : " + code, true);
+            logClientDebug("Modal activée pour le protocole : " + code, true);
             
             stopGeoTracking();
             updateGpsUI();
@@ -270,14 +559,13 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
             }
         }
 
-        // Déchiffrement AES-256-CBC via WebCrypto API
         async function decryptAESCBC(encryptedBase64, password, coordName) {
             try {
                 logClientDebug(`Déchiffrement (${coordName}) : "${encryptedBase64.substring(0, 15)}..."`);
                 const rawData = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
                 
                 if (rawData.length < 17) {
-                    logClientDebug(`&rarr; [ÉCHEC ${coordName}] Taille de données insuffisante (< 17 octets).`);
+                    logClientDebug(`&rarr; [ÉCHEC ${coordName}] Taille de données insuffisante.`);
                     return null;
                 }
 
@@ -304,14 +592,14 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
         }
 
         async function updateGpsUI() {
-            logClientDebug("--- Mise à jour du point GPS ---", true);
+            logClientDebug("--- Traitement des points de navigation ---", true);
             const proto = protocolesData[currentProtoCode];
             const points = proto.points || [];
             const password = document.getElementById('clientPassword').value;
 
             if (points.length === 0) {
-                logClientDebug("Aucun point GPS enregistré.");
-                document.getElementById('gpsStepInfo').innerText = "Aucune coordonnée GPS pour ce protocole.";
+                logClientDebug("Aucun point GPS associé.");
+                document.getElementById('gpsStepInfo').innerText = "Aucune coordonnée GPS renseignée pour ce protocole.";
                 document.getElementById('btnCheckGps').style.display = 'none';
                 document.getElementById('mapsLinkBox').innerHTML = '';
                 stopGeoTracking();
@@ -319,12 +607,10 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
             }
 
             const targetPoint = points[currentPointIndex];
-            logClientDebug(`Traitement du point ${currentPointIndex + 1}/${points.length}`);
+            logClientDebug(`Traitement Cible : Point ${currentPointIndex + 1}/${points.length}`);
 
             if (!password) {
-                logClientDebug("Attente de la clé client...");
-                document.getElementById('gpsStepInfo').innerText = "Saisissez votre clé client pour déchiffrer l'étape.";
-                document.getElementById('gpsStatus').innerText = "";
+                document.getElementById('gpsStepInfo').innerText = "Saisissez la clé client pour déchiffrer l'étape.";
                 document.getElementById('btnCheckGps').style.display = 'none';
                 document.getElementById('mapsLinkBox').innerHTML = '';
                 stopGeoTracking();
@@ -342,29 +628,27 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
             }
 
             if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
-                logClientDebug("Échec de déchiffrement du point courant.");
-                document.getElementById('gpsStepInfo').innerText = "Mot de passe incorrect ou données corrompues.";
-                document.getElementById('gpsStatus').innerText = "";
+                logClientDebug("Échec du déchiffrement.");
+                document.getElementById('gpsStepInfo').innerText = "Clé invalide ou données altérées.";
                 document.getElementById('btnCheckGps').style.display = 'none';
                 document.getElementById('mapsLinkBox').innerHTML = '';
+                showToast("Clé de déchiffrement invalide ou corrompue.", "Erreur Clé", "error");
                 stopGeoTracking();
                 return;
             }
 
             decryptedCoords = { lat: parseFloat(lat), lng: parseFloat(lng) };
-            logClientDebug(`Point courant déchiffré : (${decryptedCoords.lat}, ${decryptedCoords.lng})`);
+            logClientDebug(`Coordonnées déchiffrées : (${decryptedCoords.lat}, ${decryptedCoords.lng})`);
 
             document.getElementById('btnCheckGps').style.display = 'block';
-            document.getElementById('btnCheckGps').innerText = "Démarrer le suivi GPS en temps réel";
+            document.getElementById('btnCheckGps').innerText = "DÉMARRER LE SUIVI GPS TEMPS RÉEL";
             document.getElementById('gpsStepInfo').innerHTML = `
-                <strong>Point ${currentPointIndex + 1} / ${points.length} :</strong> ${targetPoint.nom || 'Point ' + (currentPointIndex + 1)}<br>
-                <strong>Cible :</strong> ${decryptedCoords.lat}, ${decryptedCoords.lng}
+                <strong style="color:var(--border-color);">Point ${currentPointIndex + 1} / ${points.length} :</strong> ${targetPoint.nom || 'Point ' + (currentPointIndex + 1)}<br>
+                <strong>Cible déchiffrée :</strong> ${decryptedCoords.lat}, ${decryptedCoords.lng}
             `;
-            document.getElementById('gpsStatus').innerText = "Clé valide. Appuyez sur le bouton pour lancer le suivi de position.";
-            document.getElementById('gpsStatus').style.color = "#28a745";
             
             document.getElementById('mapsLinkBox').innerHTML = `
-                <a href="https://maps.google.com/?q=${decryptedCoords.lat},${decryptedCoords.lng}" target="_blank" style="color:#17a2b8;">Ouvrir l'étape dans Google Maps</a>
+                <a href="https://maps.google.com/?q=${decryptedCoords.lat},${decryptedCoords.lng}" target="_blank" style="color: var(--border-color);">► Ouvrir l'étape dans Google Maps</a>
             `;
         }
 
@@ -382,30 +666,27 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
             if (geoWatchId !== null) {
                 navigator.geolocation.clearWatch(geoWatchId);
                 geoWatchId = null;
-                logClientDebug("Suivi GPS arrêté.");
+                logClientDebug("Suivi GPS désactivé.");
             }
         }
 
         function checkUserLocation() {
-            const statusBox = document.getElementById('gpsStatus');
             const proto = protocolesData[currentProtoCode];
 
             if (!navigator.geolocation) {
-                statusBox.innerText = "La géolocalisation n'est pas supportée par votre appareil.";
-                statusBox.style.color = "#dc3545";
+                showToast("Géolocalisation non supportée sur cet appareil.", "Erreur Matérielle", "error");
                 return;
             }
 
             if (geoWatchId !== null) {
                 stopGeoTracking();
-                statusBox.innerText = "Suivi GPS en pause.";
-                document.getElementById('btnCheckGps').innerText = "Démarrer le suivi GPS en temps réel";
+                showToast("Suivi GPS suspendu.", "Info GPS", "warning");
+                document.getElementById('btnCheckGps').innerText = "DÉMARRER LE SUIVI GPS TEMPS RÉEL";
                 return;
             }
 
-            statusBox.innerText = "Recherche de la position en cours...";
-            statusBox.style.color = "#17a2b8";
-            document.getElementById('btnCheckGps').innerText = "Arrêter le suivi GPS";
+            showToast("Acquisition du signal GPS en cours...", "Suivi GPS", "success");
+            document.getElementById('btnCheckGps').innerText = "ARRÊTER LE SUIVI GPS";
 
             geoWatchId = navigator.geolocation.watchPosition(
                 (position) => {
@@ -413,34 +694,29 @@ if (isset($_GET['format']) &&$_GET['format'] === 'json') {
                     const userLng = position.coords.longitude;
                     const distance = calculateDistanceInKm(userLat, userLng, decryptedCoords.lat, decryptedCoords.lng);
 
-                    logClientDebug(`GPS : [${userLat.toFixed(5)}, ${userLng.toFixed(5)}] | Distance cible : ${distance.toFixed(3)} km`);
+                    logClientDebug(`Position : [${userLat.toFixed(5)}, ${userLng.toFixed(5)}] | Distance : ${distance.toFixed(3)} km`);
 
                     if (distance <= 1.0) {
                         stopGeoTracking();
                         
                         if (currentPointIndex + 1 < proto.points.length) {
-                            statusBox.innerText = `Point ${currentPointIndex + 1} atteint ! (${(distance * 1000).toFixed(0)}m). Passage au point suivant...`;
-                            statusBox.style.color = "#28a745";
-                            
+                            showToast(`Point ${currentPointIndex + 1} atteint ! Passage à l'étape suivante...`, "Étape Validée", "success");
                             currentPointIndex++;
                             setTimeout(() => {
                                 updateGpsUI();
                                 checkUserLocation();
                             }, 2500);
                         } else {
-                            statusBox.innerText = "Félicitations ! Dernier point d'extraction atteint. Protocole terminé.";
-                            statusBox.style.color = "#28a745";
+                            showToast("Dernier point d'extraction atteint ! Protocole clôturé.", "Mission Terminée", "success");
                             document.getElementById('btnCheckGps').style.display = 'none';
                         }
                     } else {
-                        statusBox.innerText = `En route... Distance du point ${currentPointIndex + 1} : ${distance.toFixed(2)} km (Zone de validation : < 1 km)`;
-                        statusBox.style.color = "#ffc107";
+                        logClientDebug(`En route vers le point ${currentPointIndex + 1} (${distance.toFixed(2)} km)`);
                     }
                 },
                 (err) => {
-                    logClientDebug(`Erreur de géolocalisation : ${err.message}`);
-                    statusBox.innerText = "Erreur d'accès au GPS. Veuillez vérifier vos autorisations.";
-                    statusBox.style.color = "#dc3545";
+                    logClientDebug(`Erreur GPS : ${err.message}`);
+                    showToast("Impossible d'accéder aux données GPS de l'appareil.", "Erreur GPS", "error");
                     stopGeoTracking();
                 },
                 {
