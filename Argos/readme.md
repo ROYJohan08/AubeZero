@@ -22,6 +22,48 @@ Désigné d'après le géant aux cent yeux de la mythologie grecque, **Argos** e
 
 ---
 
+## 📸 Aperçu des fonctionnalités (Carrousel / Accordéon)
+
+<details open>
+  <summary><b>1. Module GPS - Vue globale (AZGps.php - Page 1)</b></summary>
+  <br>
+  <p align="center">
+    <img src="./Images/AZGps.php (1).png" alt="AZGps Vue 1" width="85%">
+  </p>
+</details>
+
+<details>
+  <summary><b>2. Module GPS - Détails et suivi (AZGps.php - Page 2)</b></summary>
+  <br>
+  <p align="center">
+    <img src="./Images/AZGps.php (2).png" alt="AZGps Vue 2" width="85%">
+  </p>
+</details>
+
+<details>
+  <summary><b>3. Protocoles réseau - Configuration (AZProtocoles.php - Page 1)</b></summary>
+  <br>
+  <p align="center">
+    <img src="./Images/AZProtocoles.php (1).png" alt="AZProtocoles Vue 1" width="85%">
+  </p>
+</details>
+
+<details>
+  <summary><b>4. Protocoles réseau - État et logs (AZProtocoles.php - Page 2)</b></summary>
+  <br>
+  <p align="center">
+    <img src="./Images/AZProtocoles.php (2).png" alt="AZProtocoles Vue 2" width="85%">
+  </p>
+</details>
+
+<details>
+  <summary><b>5. Vérification du statut système (AZUpCheck.php)</b></summary>
+  <br>
+  <p align="center">
+    <img src="./Images/AZUpCheck.php.png" alt="AZUpCheck Vue" width="85%">
+  </p>
+</details>
+
 ## 🏗️ Integration dans l'Architecture AubeZero
 
 `Argos` communique et s'interface directement avec plusieurs modules de l'écosystème :
